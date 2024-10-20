@@ -1,0 +1,18 @@
+git clone https://github.com/grimfang4/sdl-gpu.git sdl-gpu-src
+
+mkdir sdl-gpu-build
+cd sdl-gpu-build
+
+cmake ../sdl-gpu-src/ \
+	-G "MinGW Makefiles" \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_PREFIX_PATH=D:/Programs/msys64/home/nameu/dev/SDKs \
+	-DCMAKE_INSTALL_PREFIX=../SDL_GPU \
+	-DSDL2_LIBRARY=D:\Programs\msys64\home\nameu\dev\SDKs\SDL2-2.26.5\x86_64-w64-mingw32\lib \
+	-DSDL2_INCLUDE_DIR=D:\Programs\msys64\home\nameu\dev\SDKs\SDL2-2.26.5\x86_64-w64-mingw32\include\SDL2 \
+	-DSDL2MAIN_LIBRARY=D:\Programs\msys64\home\nameu\dev\SDKs\SDL2-2.26.5\x86_64-w64-mingw32\lib\libSDL2.a \
+	-DCMAKE_C_FLAGS="-ID:\Programs\msys64\home\nameu\dev\SDKs\SDL2-2.26.5\x86_64-w64-mingw32\include\SDL2"
+	
+/ucrt64/bin/mingw32-make.exe SDL_gpu
+
+cp -r SDL_gpu-MINGW/ ../SDL_gpu

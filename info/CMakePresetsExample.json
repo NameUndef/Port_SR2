@@ -1,0 +1,47 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "mingw_uctl64",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_PREFIX_PATH": "D:/Programs/msys64/home/nameu/dev/SDKs",
+                "CMAKE_INSTALL_PREFIX": "D:/Development/ProjectQaragon",
+                "CMAKE_C_COMPILER": "D:/Programs/msys64/ucrt64/bin/cc.exe",
+                "CMAKE_CXX_COMPILER": "D:/Programs/msys64/ucrt64/bin/c++.exe",
+                "CMAKE_CXX_FLAGS": "-Wall -Werror -Wextra -Wzero-as-null-pointer-constant -Winit-self -Wswitch-default -Wfloat-equal -Wno-unused-parameter -fPIC -march=native"
+            },
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            }
+        },
+        {
+            "name": "mingw_uctl64_release",
+            "displayName": "MinGW UCTL64 Release",
+            "inherits": "mingw_uctl64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "mingw_uctl64_debug",
+            "displayName": "MinGW UCTL64 Debug",
+            "inherits": "mingw_uctl64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        }
+    ],
+
+    "buildPresets": [
+        {
+            "name": "ProjectQaragon",
+            "description": "",
+            "displayName": "",
+            "configurePreset": "mingw_uctl64"
+        }
+    ]
+}
