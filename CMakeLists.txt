@@ -1,6 +1,6 @@
 ﻿
 cmake_minimum_required (VERSION 3.20)
-project ("ProjectQaragon")
+project ("OSR-CPP")
 
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
@@ -9,7 +9,7 @@ find_package(SDL2_net REQUIRED)
 find_package(SDL2_ttf REQUIRED)    
 
 if(NOT SDL2_FOUND)
-    message("Error: SDL not found")
+    message("Error: SDL2 not found")
 endif()
 
 install(IMPORTED_RUNTIME_ARTIFACTS 
