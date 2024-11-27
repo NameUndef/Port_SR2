@@ -1,0 +1,42 @@
+echo MSYS64 UCRT64 x86_64
+
+LIBS_DIR=D:/Programs/msys64/home/nameu/dev/SDKs
+cd ${LIBS_DIR}
+
+echo SDL-GPU
+
+git clone https://github.com/grimfang4/sdl-gpu.git sdl-gpu-src
+
+mkdir sdl-gpu-build
+cd sdl-gpu-build
+
+cmake ../sdl-gpu-src/ \
+	-G "MinGW Makefiles" \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_PREFIX_PATH=${LIBS_DIR} \
+	-DCMAKE_INSTALL_PREFIX=../SDL_GPU \
+	-DSDL2_LIBRARY=${LIBS_DIR}/SDL2-2.26.5/x86_64-w64-mingw32\lib \
+	-DSDL2_INCLUDE_DIR=${LIBS_DIR}/SDL2-2.26.5/x86_64-w64-mingw32/include/SDL2 \
+	-DSDL2MAIN_LIBRARY=${LIBS_DIR}/SDL2-2.26.5/x86_64-w64-mingw32/lib/libSDL2.a \
+	-DCMAKE_C_FLAGS="-I${LIBS_DIR}/SDL2-2.26.5/x86_64-w64-mingw32/include/SDL2"
+	
+/ucrt64/bin/mingw32-make.exe SDL_gpu
+
+cp -r SDL_gpu-MINGW/ ../SDL_gpu
+cd ..
+
+echo Catch2
+
+git clone https://github.com/catchorg/Catch2.git catch2-src
+
+mkdir catch2-build
+cd catch2-build
+
+cmake ../catch2-src/ \
+	-G "MinGW Makefiles" \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_PREFIX_PATH=${LIBS_DIR} \
+	-DCMAKE_INSTALL_PREFIX=../Catch2
+
+cmake --build . --target install
+cd ..

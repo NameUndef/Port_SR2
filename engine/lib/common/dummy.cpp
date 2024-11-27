@@ -1,0 +1,1 @@
+/* For CMake interface lib to shared lib (without source) linking. Yeah, this is CMake! */
