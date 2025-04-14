@@ -1,57 +1,36 @@
+#ifndef INCLUDE_ERROR_CODE_HPP_
+#define INCLUDE_ERROR_CODE_HPP_
+
 #include <variant>
 #include <deque>
 #include <utility>
 #include <type_traits>
 
+/* approximate analogue of std:excepted in C++23 */
+
 constexpr int COMMON_GROUP = 0;
 constexpr int ERROR_UNKNOWN = 0;
 constexpr int ERROR_OK = 0;
 
-struct ErrorCode {
+class ErrorCode {
 
+public:
     using ErrorNote = std::pair<int, int>;
     
-    std::deque<ErrorNote> error_stack;
+private:
+    std::variant<std::monostate, ErrorNote, std::deque<ErrorNote>> error_stack;
     std::size_t error_notes_count = 0;
 
-    ErrorCode() = default;
-    
-    ErrorCode(int error_group, int error_code) 
-    {
-        push(error_group, error_code);
-    }
+public:
+    ErrorCode();
+    ErrorCode(int error_group, int error_code);
 
-    void push(int error_group, int error_code) 
-    {
-        if (error_code != ERROR_OK)
-            error_notes_count++;
+    void push(int error_group, int error_code);
+    void clear();
+    bool have_error() const;
 
-        error_stack.emplace_front(error_group, error_code);
-    }
-
-    void clear() 
-    { 
-        error_notes_count = 0; 
-        error_stack.clear(); 
-    }
-
-    bool have_error() const 
-    { 
-        return error_notes_count > 0; 
-    }
-
-    operator ErrorNote() const
-    {
-        if (!error_stack.empty())
-            return error_stack.front();
-        else
-            return std::make_pair(COMMON_GROUP, ERROR_OK);
-    }
-
-    bool operator==(const ErrorCode& rhs) const
-    {
-        return static_cast<ErrorNote>(*this) == static_cast<ErrorNote>(rhs);
-    }
+    operator ErrorNote() const;
+    bool operator==(const ErrorCode& rhs) const;
 };
 
 template <typename ReturnT>
@@ -75,7 +54,10 @@ constexpr ErrorCode get_error_code(ReturnOrErrorCodeT&& ret)
     return std::get<1>(std::forward<ReturnOrErrorCodeT>(ret)); 
 }
 
-template <typename ReturnT>
-bool is_error_code(ReturnOrErrorCode<ReturnT> ret) {
+template <typename ReturnOrErrorCodeT>
+constexpr bool is_error_code(ReturnOrErrorCodeT& ret)
+{
     return std::holds_alternative<ErrorCode>(ret);
 }
+
+#endif  // INCLUDE_ERROR_CODE_HPP_
