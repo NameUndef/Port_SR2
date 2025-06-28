@@ -187,7 +187,7 @@ ErrorCode Graph::dfs(
             traversal_vertexes.pop();
         }
 
-        if (command == SKIP_NEXT_NEIGHBORS || command == SKIP_CHILDRENS_AND_NEXT_NEIGHBORS) {
+        if (command == SKIP_CHILDRENS_AND_NEXT_NEIGHBORS) {
             while (!traversal_vertexes.top().is_backtracking)
                 traversal_vertexes.pop();
             visited_vertexes[traversal_vertexes.top().vertex] = false;
@@ -240,7 +240,7 @@ ErrorCode Graph::bfs(int vertex, std::function<CallbackCommand(int, int)> callba
                 traversal_vertexes.pop_back();
         }
 
-        if (command == SKIP_NEXT_NEIGHBORS || command == SKIP_CHILDRENS_AND_NEXT_NEIGHBORS) {
+        if (command == SKIP_CHILDRENS_AND_NEXT_NEIGHBORS) {
             while (!traversal_vertexes.front().is_backtracking)
                 traversal_vertexes.pop_front();
             traversal_vertexes.pop_front();

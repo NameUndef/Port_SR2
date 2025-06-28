@@ -16,7 +16,6 @@
 enum CallbackCommand {
     CONTINUE,
     SKIP_CHILDRENS,
-    SKIP_NEXT_NEIGHBORS,
     SKIP_CHILDRENS_AND_NEXT_NEIGHBORS,
     STOP
 };

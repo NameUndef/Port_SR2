@@ -397,7 +397,7 @@ make_any_args_func(FuncT func, bool make_safe = true)
 template <typename... ArgsT>
 inline AnyArgs make_any_args(ArgsT&&... args)
 {
-    return AnyArgs{std::forward<ArgsT>(args)...};
+    return AnyArgs{Inner::lvalue_ref_wrap_t<ArgsT>(std::forward<ArgsT>(args))...};
 }
 
 template <
