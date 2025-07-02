@@ -386,6 +386,7 @@ bool SubprogramLocator::start(const ID &subprogram_name, AnyArgs& args)
                 auto tmp_stopped_parent = vertexes_with_direct_tmp_stopped_parents_count.find(parent_vertex);
                 if (tmp_stopped_parent->second.first > tmp_stopped_parent->second.second) {
                     need_skip = true;
+                    break;
                 }
             }
         }
