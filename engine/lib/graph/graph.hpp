@@ -49,7 +49,8 @@ public:
     bool has_vertex(int vertex) const;
     bool has_edge(int from_vertex, int to_vertex, bool check_reverse_edge = false);
     std::size_t get_vertex_count() const;
-    std::size_t get_edge_count() const;
+    std::size_t get_edge_count();
+    std::size_t get_edge_count(int vertex) const;
 
     /* deep first search 
         callback - vertex, parent, color, is_backtracking

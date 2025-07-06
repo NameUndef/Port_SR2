@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <list>
 
 enum class SubprogramFuncNames {
     INIT,
@@ -56,7 +57,7 @@ class SubprogramLocator {
     
 public:
     bool add(const SubprogramInfo& info);
-    bool remove(const SubprogramInfo& info);
+    bool remove(const ID& subprogram_name);
 
     bool init(const ID& subprogram_name, AnyArgs& args);
     bool deinit(const ID& subprogram_name, AnyArgs& args);
@@ -108,7 +109,7 @@ private:
 
     bool add_new_subprogram(const SubprogramInfo& info, bool is_undefined_subprogram = true);
     void update_undefined_subprogram(const SubprogramInfo& info);
-    void try_make_dependent_subprograms_ready(const ID& ready_parent_subprogram_name);
+    void try_make_dependent_subprograms_ready(Subprogram* ready_parent_subprogram_name);
     void restore_subprogram_to_undefined(
         Subprogram& subprogram, 
         const Subprogram& undefined_subprogram, 
@@ -117,14 +118,17 @@ private:
         Subprogram* subprogram, 
         SubprogramStates* target_states, 
         std::size_t target_states_count,
-        std::deque<Subprogram*>& dependency_order);
-    bool accept_states_by_dep_order(
-        std::deque<Subprogram*>& dependency_order, 
-        SubprogramStates from_state, 
-        SubprogramStates to_state, 
-        SubprogramFuncNames handler_name,
-        AnyArgs& args);
+        std::deque<Subprogram*>& dependency_order,
+        bool inverse_dependencies_graph = false);
     bool call_func(Subprogram& subprogram, SubprogramFuncNames handler_name, AnyArgs& args);
+    void get_potential_tmp_inverse_dependency_order(
+        Subprogram* subprogram, 
+        SubprogramStates parent_state_skip,
+        SubprogramStates* tmp_target_states, 
+        std::size_t tmp_target_states_count, 
+        std::list<Subprogram*>& inverse_order);
+    bool deinit_change_states(Subprogram* cur_subprogram, AnyArgs& cur_args);
+    void remove_undefined_subprogram(Subprogram* subprogram);
 };
 
 const AnyArgsFunc<bool> SubprogramLocator::empty_func_ = [](auto...) { return true; };

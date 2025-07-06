@@ -125,6 +125,11 @@ bool Graph::has_edge(int from_vertex, int to_vertex, bool check_reverse_edge)
     || (check_reverse_edge && adj_list_[to_vertex].find(from_vertex) != adj_list_[to_vertex].end()));
 }
 
+std::size_t Graph::get_edge_count(int vertex)
+{
+    return adj_list_[vertex].size();
+}
+
 std::size_t Graph::get_vertex_count() const 
 { 
     return adj_list_.size(); 
