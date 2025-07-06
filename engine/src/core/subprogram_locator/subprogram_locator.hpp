@@ -128,7 +128,6 @@ private:
         std::size_t tmp_target_states_count, 
         std::list<Subprogram*>& inverse_order);
     bool deinit_change_states(Subprogram* cur_subprogram, AnyArgs& cur_args);
-    void remove_undefined_subprogram(Subprogram* subprogram);
 };
 
 const AnyArgsFunc<bool> SubprogramLocator::empty_func_ = [](auto...) { return true; };
