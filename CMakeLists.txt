@@ -1,7 +1,7 @@
 ﻿## ---------- HEAD ---------- ##
 
 cmake_minimum_required (VERSION 3.20)
-project ("OSR-CPP")
+project ("PSR2")
 
 ## ---------- EXTERNAL DEPENDENCIES ---------- ##
 

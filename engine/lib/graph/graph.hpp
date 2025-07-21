@@ -27,7 +27,7 @@ enum Colors {
 };
 
 enum CheckStructureCommand {
-    NONE,
+    TREE,
     CYCLE,
     SUBGRAPH
 };
@@ -50,7 +50,7 @@ public:
     bool has_edge(int from_vertex, int to_vertex, bool check_reverse_edge = false);
     std::size_t get_vertex_count() const;
     std::size_t get_edge_count();
-    std::size_t get_edge_count(int vertex) const;
+    std::size_t get_edge_count(int vertex);
 
     /* deep first search 
         callback - vertex, parent, color, is_backtracking

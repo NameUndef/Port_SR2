@@ -156,4 +156,18 @@ TEST_CASE("any_args_func", "[inner_lib][common][any_args_func]")
             aa_func_obj_helper_get_value_unsafe, 
             &obj_helper_1)) == "test 1 updated unsafe");
     }
+
+    SECTION("any args function class") {
+        AnyArgsFunction<int> func_1(func_sum);
+        std::function<int(int, int)> func_add = [](auto a, auto b) {return a + b;};
+        AnyArgsFunction<int> func_2(func_add);
+        AnyArgsFunc<int> aa_func = func_1;
+
+        REQUIRE(get_return(func_1(1, 2)) == 3);
+        REQUIRE(get_return(func_2(1, 2)) == 3);
+        
+        AnyArgsFunction<std::string> func_3(&ObjectHelper::get_value);
+        ObjectHelper obj_helper_1("test 1");
+        REQUIRE(get_return(func_3(&obj_helper_1)) == "test 1");
+    }
 }

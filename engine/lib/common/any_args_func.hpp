@@ -464,4 +464,85 @@ call_any_args_func(
     return func(args);
 }
 
+template <typename ReturnType>
+class AnyArgsFunction {
+private:
+    AnyArgsFunc<ReturnType> func_;
+
+public:
+    operator AnyArgsFunc<ReturnType>() const 
+    { 
+        return func_; 
+    }
+    
+    template <typename ReturnT, typename ObjectT, typename... ArgsT>
+    AnyArgsFunction(ReturnT(ObjectT::*func)(ArgsT...), bool make_safe = true)
+    : func_(std::move(Inner::make_any_args_method<ReturnT, ObjectT, ArgsT...>(func, make_safe)))
+    {}
+
+    template <typename ReturnT, typename ObjectT, typename... ArgsT>
+    AnyArgsFunction(ReturnT(ObjectT::*func)(ArgsT...) const, bool make_safe = true)
+    : func_(std::move(Inner::make_any_args_method<ReturnT, ObjectT, ArgsT...>(func, make_safe)))
+    {}
+
+    template <typename ReturnT, typename ObjectT, typename... ArgsT>
+    AnyArgsFunction(ReturnT(ObjectT::*func)(ArgsT...) volatile, bool make_safe = true)
+    : func_(std::move(Inner::make_any_args_method<ReturnT, ObjectT, ArgsT...>(func, make_safe)))
+    {}
+
+    template <typename ReturnT, typename ObjectT, typename... ArgsT>
+    AnyArgsFunction(ReturnT(ObjectT::*func)(ArgsT...) const volatile, bool make_safe = true)
+    : func_(std::move(Inner::make_any_args_method<ReturnT, ObjectT, ArgsT...>(func, make_safe)))
+    {}
+
+    template <typename ReturnT, typename... ArgsT>
+    AnyArgsFunction(ReturnT(*func)(ArgsT...), bool make_safe = true)
+    : func_(std::move(Inner::make_any_args_func<ReturnT, ArgsT...>(func, make_safe)))
+    {}
+
+    template <typename ReturnT, typename... ArgsT>
+    AnyArgsFunction(std::function<ReturnT(ArgsT...)> func, bool make_safe = true)
+    : func_(std::move(Inner::make_any_args_func<ReturnT, ArgsT...>(func, make_safe)))
+    {}
+
+    template <
+        typename... ArgsT, 
+        typename FuncT, 
+        typename ReturnT = std::invoke_result_t<FuncT, ArgsT...>>
+    AnyArgsFunction(FuncT func, bool make_safe = true)
+    : func_(std::move(Inner::make_any_args_func<ReturnT, ArgsT...>(func, make_safe)))
+    {}
+
+    template <typename ObjectT, typename... ArgsT>
+    ReturnOrErrorCode<ReturnType> operator()(
+        ObjectT* object, 
+        ArgsT&&... args)
+    {
+        /* since the creation of arguments occurs before the function is called directly, 
+        * it is also advantageous to wrap non-reference lvalues ​​in references 
+        */
+        auto any_args = AnyArgs{Inner::lvalue_ref_wrap_t<ArgsT>(std::forward<ArgsT>(args))..., object};
+        return func_(any_args);
+    }
+
+    template <typename... ArgsT>
+    ReturnOrErrorCode<ReturnType> operator()(ArgsT&&... args)
+    {
+        auto any_args = AnyArgs{Inner::lvalue_ref_wrap_t<ArgsT>(std::forward<ArgsT>(args))...};
+        return func_(any_args);
+    }
+
+    template <typename AnyArgsFuncT, typename ObjectT>
+    ReturnOrErrorCode<ReturnType> operator()(ObjectT* object, AnyArgs& args)
+    {
+        args.push_back(object);
+        return func_(args);
+    }
+
+    ReturnOrErrorCode<ReturnType> operator()(AnyArgs& args)
+    {
+        return func_(args);
+    }
+};
+
 #endif  // INCLUDE_ANY_ARGS_FUNC_HPP_

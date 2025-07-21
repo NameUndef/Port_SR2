@@ -127,7 +127,11 @@ bool Graph::has_edge(int from_vertex, int to_vertex, bool check_reverse_edge)
 
 std::size_t Graph::get_edge_count(int vertex)
 {
-    return adj_list_[vertex].size();
+    auto it = adj_list_.find(vertex);
+    if (it == adj_list_.end())
+        return 0;
+
+    return it->second.size();
 }
 
 std::size_t Graph::get_vertex_count() const 
@@ -135,7 +139,7 @@ std::size_t Graph::get_vertex_count() const
     return adj_list_.size(); 
 }
 
-std::size_t Graph::get_edge_count() const 
+std::size_t Graph::get_edge_count() 
 { 
     return edge_count_; 
 }
@@ -260,9 +264,9 @@ ReturnOrErrorCode<bool> Graph::is_have_structure(int vertex, CheckStructureComma
     bool is_have_structure = false;
     auto err = dfs(vertex, [&is_have_structure, structure](int vertex, bool parent, Colors color, bool) {
 
-        if ((structure == SUBGRAPH && color != Colors::BLACK)
-            || (structure == CYCLE && color != Colors::GRAY)
-            || (structure == NONE && color == Colors::WHITE)) {
+        if ((structure == SUBGRAPH && color == Colors::BLACK)
+            || (structure == CYCLE && color == Colors::GRAY)
+            || (structure == TREE && color != Colors::WHITE)) {
             is_have_structure = true;
             return CallbackCommand::STOP;
         }
@@ -272,7 +276,7 @@ ReturnOrErrorCode<bool> Graph::is_have_structure(int vertex, CheckStructureComma
     if (err.have_error() != 0)
         return err;
 
-    return is_have_structure;
+    return structure == TREE? !is_have_structure : is_have_structure;
 }
 
 ReturnOrErrorCode<bool> Graph::get_shortest_path(int vertex_from, int vertex_to, std::vector<int>& path)

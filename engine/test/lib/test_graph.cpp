@@ -52,6 +52,7 @@ SCENARIO( "Graph", "[inner_lib][graph]" )
             THEN("graph has cycle")
             {
                 REQUIRE(get_return(graph.is_have_structure(1, CheckStructureCommand::CYCLE)) == true);
+                REQUIRE(get_return(graph.is_have_structure(1, CheckStructureCommand::TREE)) == false);
             }
         }
 
@@ -67,6 +68,7 @@ SCENARIO( "Graph", "[inner_lib][graph]" )
             THEN("graph has subgraph")
             {
                 REQUIRE(get_return(graph.is_have_structure(1, CheckStructureCommand::SUBGRAPH)) == true);
+                REQUIRE(get_return(graph.is_have_structure(1, CheckStructureCommand::TREE)) == false);
             }
         }
     }

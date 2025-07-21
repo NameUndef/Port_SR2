@@ -4,6 +4,11 @@
 #include <set>
 #include <list>
 
+const AnyArgsFunc<bool> SubprogramLocator::empty_func_ = [](auto...) 
+{ 
+    return true; 
+};
+
 SubprogramStates SubprogramLocator::get_subprogram(
     const ID& subprogram_name, 
     Subprogram** subprogram)
@@ -43,9 +48,9 @@ bool SubprogramLocator::add_new_subprogram(const SubprogramInfo& info, bool is_u
     
     SubprogramInfo& subprogram_info = subprograms_[info.name_].info_;
 
-    for (int i = 0; i < static_cast<int>(SubprogramFuncNames::COUNT); ++i) {
-        if (!subprogram_info.funcs[i]) {
-            subprogram_info.funcs[i] = empty_func_;
+    for (std::size_t i = 0; i < FUNCS_COUNT; ++i) {
+        if (!subprogram_info.funcs_[i]) {
+            subprogram_info.funcs_[i] = empty_func_;
         }
     }
 
@@ -59,10 +64,11 @@ void SubprogramLocator::update_undefined_subprogram(const SubprogramInfo& info)
     dest_subprogram.info_.dependencies_ = info.dependencies_;
     dest_subprogram.state_ = SubprogramStates::DEFINED_WITHOUT_DEFINED_PARENT;
 
-    for (int i = 0; i < static_cast<int>(SubprogramFuncNames::COUNT); ++i) {
-        if (info.funcs[i]) {
-            dest_subprogram.info_.funcs[i] = info.funcs[i];
+    for (std::size_t i = 0; i < FUNCS_COUNT; ++i) {
+        if (info.funcs_[i]) {
+            dest_subprogram.info_.funcs_[i] = info.funcs_[i];
         }
+        dest_subprogram.info_.default_args_[i] = info.default_args_[i];
     }
 }
 
@@ -73,34 +79,14 @@ void SubprogramLocator::update_undefined_subprogram(const SubprogramInfo& info)
  */
 void SubprogramLocator::try_make_dependent_subprograms_ready(Subprogram* subprogram)
 {
-    inverse_dependencies_graph_.dfs(
-        subprogram->vertex_, 
-        [&](int vertex, int, Colors, bool) {
-
-        if (vertex == subprogram->vertex_) {
-            return CallbackCommand::CONTINUE;
-        }
-                
-        auto &cur_subprogram = subprograms_[vertexes_to_subprogram_names_[vertex]];
-
-        bool all_parent_subprograms_defined = true;
-        for (auto& parent_subprogram_name : cur_subprogram.info_.dependencies_) {
-            auto& parent_subprogram = subprograms_[parent_subprogram_name];
-
-            if (parent_subprogram.state_ == SubprogramStates::UNDEFINED 
-             || parent_subprogram.state_ == SubprogramStates::DEFINED_WITHOUT_DEFINED_PARENT) {
-                    all_parent_subprograms_defined = false;
-                    break;
-            }
-        }
-
-        if (all_parent_subprograms_defined) {
-            cur_subprogram.state_ = SubprogramStates::READY_TO_INITIALIZE;
-            return CallbackCommand::CONTINUE;
-        }
-
-        return CallbackCommand::SKIP_CHILDRENS;
-    });
+    std::list<Subprogram*> order;
+    SubprogramStates states[] = {SubprogramStates::DEFINED_WITHOUT_DEFINED_PARENT};
+    SubprogramStates skip_states[] = {SubprogramStates::UNDEFINED};
+    get_target_inverse_dependency_order(subprogram, order, states, 1, skip_states, 1, nullptr, 0);
+    for (auto it = order.begin(); it != order.end(); it++) {
+        Subprogram* cur_subprogram = *it;
+        cur_subprogram->state_ = SubprogramStates::READY_TO_INITIALIZE;
+    }
 }
 
 void SubprogramLocator::restore_subprogram_to_undefined(
@@ -124,7 +110,13 @@ void SubprogramLocator::restore_subprogram_to_undefined(
         subprogram = undefined_subprogram;
 }
 
-bool SubprogramLocator::add(const SubprogramInfo& info)
+SubprogramStates SubprogramLocator::get_subprogram_state(const ID &subprogram_name)
+{
+    Subprogram* subprogram = nullptr;
+    return get_subprogram(subprogram_name, &subprogram);
+}
+
+bool SubprogramLocator::add(const SubprogramInfo &info)
 {
     bool it_was_undefined = false;
     Subprogram undefined_subprogram;
@@ -156,7 +148,7 @@ bool SubprogramLocator::add(const SubprogramInfo& info)
 
             SubprogramInfo undefined_subprogram_info;
             undefined_subprogram_info.name_ = dependency;
-            add_new_subprogram(undefined_subprogram_info, false);
+            add_new_subprogram(undefined_subprogram_info, true);
             added_undefined_subprograms.insert(dependency);
             all_parent_subprograms_defined = false;
 
@@ -196,7 +188,7 @@ bool SubprogramLocator::remove(const ID& subprogram_name)
 
     std::deque<Subprogram*> inverse_dependency_order;
     AnyArgs empty_args;
-    get_dependency_order(subprogram, nullptr, 0, inverse_dependency_order);
+    get_dependency_order(subprogram, nullptr, 0, inverse_dependency_order, false, true);
 
     for (auto it = inverse_dependency_order.begin(); it != inverse_dependency_order.end(); it++) {
         if (!deinit_change_states(*it, empty_args)) {
@@ -204,11 +196,11 @@ bool SubprogramLocator::remove(const ID& subprogram_name)
         }
 
         Subprogram* cur_subprogram = *it;
-        cur_subprogram->state_ == SubprogramStates::DEFINED_WITHOUT_DEFINED_PARENT;
+        cur_subprogram->state_ = SubprogramStates::DEFINED_WITHOUT_DEFINED_PARENT;
     }
 
     deinit_change_states(subprogram, empty_args);
-    subprogram->state_ == SubprogramStates::UNDEFINED;
+    subprogram->state_ = SubprogramStates::UNDEFINED;
     
     for (auto it = subprogram->info_.dependencies_.begin(); it != subprogram->info_.dependencies_.end(); it++) {
         Subprogram* parent = &subprograms_[*it];
@@ -224,9 +216,9 @@ bool SubprogramLocator::remove(const ID& subprogram_name)
         }
     }
 
-    if (inverse_dependency_order.empty()) {
-        for (std::size_t i = 0; i < static_cast<int>(SubprogramFuncNames::COUNT); ++i) {
-            subprogram->info_.funcs[i] = empty_func_;
+    if (!inverse_dependency_order.empty()) {
+        for (std::size_t i = 0; i < FUNCS_COUNT; ++i) {
+            subprogram->info_.funcs_[i] = empty_func_;
             subprogram->info_.default_args_[i].clear();
         }
         subprogram->info_.dependencies_.clear();
@@ -245,6 +237,7 @@ void SubprogramLocator::get_dependency_order(
     SubprogramStates* target_states, 
     std::size_t target_states_count,
     std::deque<Subprogram*>& dependency_order,
+    bool push_front,
     bool inverse_dependencies_graph)
 {
     auto& dependencies_graph = inverse_dependencies_graph ? inverse_dependencies_graph_ : dependencies_graph_;
@@ -260,7 +253,12 @@ void SubprogramLocator::get_dependency_order(
                 return CallbackCommand::CONTINUE;
             }
 
-            dependency_order.push_front(&subprogram_node);
+            if (push_front) {
+                dependency_order.push_front(&subprogram_node);
+            } else {
+                dependency_order.push_back(&subprogram_node);
+            }
+
             return CallbackCommand::CONTINUE;
         }
 
@@ -290,7 +288,7 @@ void SubprogramLocator::get_dependency_order(
 bool SubprogramLocator::call_func(Subprogram &subprogram, SubprogramFuncNames handler_name, AnyArgs &args)
 {
     AnyArgs empty_args;
-    AnyArgs* default_args = &subprogram.info_.default_args_[static_cast<int>(handler_name)];
+    AnyArgs* default_args = &subprogram.info_.default_args_[static_cast<std::size_t>(handler_name)];
     AnyArgs* target_args = &empty_args;
 
     if (!args.empty()) {
@@ -299,9 +297,11 @@ bool SubprogramLocator::call_func(Subprogram &subprogram, SubprogramFuncNames ha
         target_args = default_args;
     }
 
-    if (get_return(call_any_args_func(subprogram.info_.funcs[static_cast<int>(handler_name)], target_args))) {
+    if (!get_return(call_any_args_func(subprogram.info_.funcs_[static_cast<std::size_t>(handler_name)], *target_args))) {
         return false;
     }
+
+    return true;
 }
 
 bool SubprogramLocator::init(const ID &subprogram_name, AnyArgs& args)
@@ -343,10 +343,10 @@ bool SubprogramLocator::deinit_change_states(Subprogram* cur_subprogram, AnyArgs
             return false;
         }
     } else if (cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_STOPPED
-        || cur_subprogram->state_ == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED) {
+        || cur_subprogram->state_ == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED)
+    {
         cur_subprogram->state_ = SubprogramStates::STOPPED;
     }
-
     if (cur_subprogram->state_ == SubprogramStates::STOPPED) {
         cur_subprogram->state_ = SubprogramStates::READY_TO_INITIALIZE;
         if (!call_func(*cur_subprogram, SubprogramFuncNames::DEINIT, cur_args)) {
@@ -365,8 +365,8 @@ bool SubprogramLocator::deinit(const ID &subprogram_name, AnyArgs& args)
     if (state != SubprogramStates::STOPPED 
         && state != SubprogramStates::STARTED 
         && state != SubprogramStates::PAUSED
-        && state != SubprogramStates::STARTED_WHEN_PARENT_PAUSED
         && state != SubprogramStates::STARTED_WHEN_PARENT_STOPPED
+        && state != SubprogramStates::STARTED_WHEN_PARENT_PAUSED
         && state != SubprogramStates::PAUSED_WHEN_PARENT_STOPPED)
         return false;
 
@@ -374,13 +374,13 @@ bool SubprogramLocator::deinit(const ID &subprogram_name, AnyArgs& args)
         SubprogramStates::STOPPED, 
         SubprogramStates::STARTED, 
         SubprogramStates::PAUSED, 
-        SubprogramStates::STARTED_WHEN_PARENT_PAUSED, 
         SubprogramStates::STARTED_WHEN_PARENT_STOPPED, 
+        SubprogramStates::STARTED_WHEN_PARENT_PAUSED,
         SubprogramStates::PAUSED_WHEN_PARENT_STOPPED
     };
 
     std::deque<Subprogram*> inverse_dependency_order;
-    get_dependency_order(subprogram, states, 6, inverse_dependency_order, true);
+    get_dependency_order(subprogram, states, 6, inverse_dependency_order, false, true);
     AnyArgs empty_args;
 
     for (auto it = inverse_dependency_order.begin(); it != inverse_dependency_order.end(); it++) {
@@ -396,182 +396,306 @@ bool SubprogramLocator::deinit(const ID &subprogram_name, AnyArgs& args)
     return true;
 }
 
-void SubprogramLocator::get_potential_tmp_inverse_dependency_order(
+struct IgnoredParentForSkipCountingRule {
+    SubprogramStates target_state;
+    SubprogramStates ignored_parent; 
+};
+
+void SubprogramLocator::get_target_inverse_dependency_order(
     Subprogram *subprogram, 
-    SubprogramStates parent_state_skip,
-    SubprogramStates *tmp_target_states, 
-    std::size_t tmp_target_states_count, 
-    std::list<Subprogram *> &inverse_order)
+    std::list<Subprogram *> &inverse_order,
+    SubprogramStates *target_states, 
+    std::size_t target_states_count, 
+    SubprogramStates* skip_parent_states, 
+    std::size_t skip_parent_states_count,
+    IgnoredParentForSkipCountingRule* ignore_parent_for_skip_counting_rule,
+    std::size_t ignore_parent_for_skip_counting_rule_count)
 {
-    std::unordered_map<int, std::set<int>> vertexes_with_tmp_state_parents;
-    std::unordered_map<int, std::pair<std::size_t, std::size_t>> vertexes_with_direct_tmp_state_parents_count;
-    std::vector<Subprogram*> current_tmp_state_parents;
+    Graph tmp_graph;
+    std::unordered_map<int, std::pair<std::size_t, std::unordered_map<SubprogramStates, std::size_t>>> target_parents_counts;
 
     inverse_dependencies_graph_.dfs(
+    subprogram->vertex_, 
+    [&](int vertex, int parent, Colors color, bool) {
+
+        if (vertex == subprogram->vertex_) {
+            return CallbackCommand::CONTINUE;
+        }
+
+        Subprogram* cur_subprogram = &subprograms_[vertexes_to_subprogram_names_[vertex]];
+        {
+            bool is_target_state = false;
+            for (size_t i = 0; i < target_states_count; ++i) {
+                if (cur_subprogram->state_ == target_states[i]) {
+                    is_target_state = true;
+                    break;
+                }
+            }
+
+            if (target_states_count == 0) {
+                is_target_state = true;
+            }
+
+            if (!is_target_state) {
+                return CallbackCommand::SKIP_CHILDRENS;
+            }
+        }
+
+        if (color != Colors::WHITE) {
+            if (auto it = target_parents_counts.find(vertex); it != target_parents_counts.end()) {
+                it->second.second[cur_subprogram->state_]--;
+                it->second.first--;
+            }
+            if (tmp_graph.has_vertex(parent) && tmp_graph.has_vertex(vertex)) {
+                tmp_graph.add_edge(parent, vertex);
+            }
+            return CallbackCommand::CONTINUE;
+        }
+
+        {
+            bool skip = false;
+            std::unordered_map<SubprogramStates, std::size_t> counts;
+            std::size_t target_parents_count = 0;
+            for (auto& parent_name : cur_subprogram->info_.dependencies_) {
+                Subprogram* parent = &subprograms_[parent_name];
+                for (size_t i = 0; i < skip_parent_states_count; ++i) {
+                    if (parent->state_ == skip_parent_states[i]) {
+                        skip = true;
+                        break;
+                    }
+                }
+
+                if (skip) {
+                    return CallbackCommand::SKIP_CHILDRENS;
+                }
+
+                for (size_t i = 0; i < target_states_count; ++i) {
+                    if (parent->state_ == target_states[i]) {
+                        counts[parent->state_]++;
+                        target_parents_count++;
+                        break;
+                    }
+                }
+            }
+
+            if (target_parents_count > 1) {
+                counts[subprograms_[vertexes_to_subprogram_names_[parent]].state_]--;
+                target_parents_count--;
+                target_parents_counts[vertex].second = counts;
+                target_parents_counts[vertex].first = target_parents_count;
+            }
+        }
+
+        tmp_graph.add_edge(parent, vertex);
+
+        return CallbackCommand::CONTINUE;
+    });
+
+    std::unordered_set<int> skipped_vertices;
+    for (auto it = target_parents_counts.begin(); it != target_parents_counts.end(); ++it) {
+        if (it->second.first > 0) {
+
+            bool ignore_skipping = false;
+            if (ignore_parent_for_skip_counting_rule) {
+                SubprogramStates state = subprograms_[vertexes_to_subprogram_names_[it->first]].state_;
+                for (std::size_t i = 0; i < ignore_parent_for_skip_counting_rule_count; ++i) {
+                    if (state == ignore_parent_for_skip_counting_rule[i].target_state) {
+                        if (it->second.second[ignore_parent_for_skip_counting_rule[i].ignored_parent] == it->second.first) {
+                            ignore_skipping = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (ignore_skipping) {
+                continue;
+            }
+
+            tmp_graph.dfs(it->first, [&](int vertex, int parent, Colors color, bool) {
+
+                if (color != Colors::WHITE) {
+                    return CallbackCommand::CONTINUE;
+                }
+
+                skipped_vertices.insert(vertex);
+                return CallbackCommand::CONTINUE;
+            });
+        }
+    }
+
+    tmp_graph.dfs(
         subprogram->vertex_, 
         [&](int vertex, int parent, Colors color, bool is_backtracking) {
 
-        Subprogram* cur_subprogram = &subprograms_[vertexes_to_subprogram_names_[vertex]];
+            if (is_backtracking) {
+                if (vertex != subprogram->vertex_) {
+                    inverse_order.push_back(&subprograms_[vertexes_to_subprogram_names_[vertex]]);
+                }
+                return CallbackCommand::CONTINUE;
+            }
 
-        if (cur_subprogram->vertex_ == subprogram->vertex_) {
-            return CallbackCommand::CONTINUE;
-        }
+            if (color != Colors::WHITE) {
+                return CallbackCommand::CONTINUE;
+            }
+
+            if (skipped_vertices.find(vertex) != skipped_vertices.end()) {
+                return CallbackCommand::SKIP_CHILDRENS;
+            }
             
-        if (is_backtracking) {
-            inverse_order.push_back(&subprograms_[vertexes_to_subprogram_names_[vertex]]);
-            if (vertexes_with_direct_tmp_state_parents_count.find(vertex) != vertexes_with_direct_tmp_state_parents_count.end()) {
-                current_tmp_state_parents.pop_back();
-            }
             return CallbackCommand::CONTINUE;
-        }
+        }, true);
+}
 
-        bool is_tmp_state = false;
-        for (size_t i = 0; i < tmp_target_states_count; ++i) {
-            if (cur_subprogram->state_ == tmp_target_states[i]) {
-                is_tmp_state = true;
-                break;
-            }
-        }
+bool SubprogramLocator::start_change_state(Subprogram* cur_subprogram, AnyArgs& init_args, AnyArgs& start_args)
+{
+    if (cur_subprogram->state_ == SubprogramStates::READY_TO_INITIALIZE) {
+        cur_subprogram->state_ = SubprogramStates::STOPPED;
 
-        if (color == Colors::BLACK) {
-            if (is_tmp_state) {
-                vertexes_with_direct_tmp_state_parents_count[vertex].second++;
-            }
-            return CallbackCommand::CONTINUE;
-        }   
-
-        if (!is_tmp_state)
-            return CallbackCommand::SKIP_CHILDRENS;
-
-        if (!current_tmp_state_parents.empty()) {
-            for (Subprogram* subprogram : current_tmp_state_parents) {
-                vertexes_with_tmp_state_parents[vertex].insert(subprogram->vertex_);
-            }
-        }
-
-        bool have_state_skip_parents = false;
-        std::size_t tmp_state_parent_count = 0;
-        for (auto& dependency : cur_subprogram->info_.dependencies_) {
-            Subprogram* parent_subprogram = &subprograms_[dependency];
-            if (parent_subprogram->state_ == parent_state_skip) {
-                have_state_skip_parents = true;
-                break;
-            }
-
-            for (size_t i = 0; i < tmp_target_states_count; ++i) {
-                if (parent_subprogram->state_ == tmp_target_states[i]) {
-                    tmp_state_parent_count++;
-                    break;
-                }
-            }
-        }
-
-        if (have_state_skip_parents) {
-            return CallbackCommand::SKIP_CHILDRENS;
-        }
-
-        if (tmp_state_parent_count > 1) {
-            vertexes_with_direct_tmp_state_parents_count[vertex].first = tmp_state_parent_count;
-            vertexes_with_direct_tmp_state_parents_count[vertex].second = 1;
-            current_tmp_state_parents.push_back(cur_subprogram);
-        }
-
-        return CallbackCommand::CONTINUE;
-
-    }, true);
-
-    for (auto it = inverse_order.begin(); it != inverse_order.end();) {
-        bool need_skip = false;
-        Subprogram* cur_subprogram = *it;
-        auto tmp_state_parents = vertexes_with_tmp_state_parents.find(cur_subprogram->vertex_);
-        if (tmp_state_parents != vertexes_with_tmp_state_parents.end()) {
-            for (int parent_vertex : tmp_state_parents->second) {
-                auto tmp_stopped_parent = vertexes_with_direct_tmp_state_parents_count.find(parent_vertex);
-                if (tmp_stopped_parent->second.first > tmp_stopped_parent->second.second) {
-                    need_skip = true;
-                    break;
-                }
-            }
-        }
-
-        if (need_skip) {
-            it = inverse_order.erase(it);
-        } else {
-            it++;
+        if (!call_func(*cur_subprogram, SubprogramFuncNames::INIT, init_args)) {
+            return false;
         }
     }
+
+    if (cur_subprogram->state_ == SubprogramStates::STOPPED 
+        || cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_STOPPED
+        || cur_subprogram->state_ == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED) {
+        
+        cur_subprogram->state_ = SubprogramStates::STARTED;
+        if (!call_func(*cur_subprogram, SubprogramFuncNames::START, start_args)) {
+            return false;
+        }
+
+    } else if (cur_subprogram->state_ == SubprogramStates::PAUSED 
+        || cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+
+        cur_subprogram->state_ = SubprogramStates::STARTED;
+        if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, start_args)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool SubprogramLocator::start(const ID &subprogram_name, AnyArgs& args)
 {
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
-    if (state != SubprogramStates::READY_TO_INITIALIZE && state != SubprogramStates::STOPPED)
+    if (state != SubprogramStates::READY_TO_INITIALIZE 
+        && state != SubprogramStates::STOPPED 
+        && state != SubprogramStates::STARTED_WHEN_PARENT_STOPPED
+        && state != SubprogramStates::STARTED_WHEN_PARENT_PAUSED
+        && state != SubprogramStates::PAUSED
+        && state != SubprogramStates::PAUSED_WHEN_PARENT_STOPPED)
         return false;
 
     std::deque<Subprogram*> dependency_order;
-    SubprogramStates states[] = {SubprogramStates::READY_TO_INITIALIZE, SubprogramStates::STOPPED};
+    SubprogramStates states[] = {
+        SubprogramStates::READY_TO_INITIALIZE, 
+        SubprogramStates::STOPPED, 
+        SubprogramStates::STARTED_WHEN_PARENT_STOPPED,
+        SubprogramStates::STARTED_WHEN_PARENT_PAUSED,
+        SubprogramStates::PAUSED,
+        SubprogramStates::PAUSED_WHEN_PARENT_STOPPED
+    };
     
-    get_dependency_order(subprogram, states, 2, dependency_order);
+    get_dependency_order(subprogram, states, 6, dependency_order);
 
     AnyArgs empty_args;
 
     for (auto it = dependency_order.begin(); it != dependency_order.end(); it++) {
         Subprogram* cur_subprogram = *it;
-
-        if (cur_subprogram->state_ == SubprogramStates::READY_TO_INITIALIZE) {
-            cur_subprogram->state_ = SubprogramStates::STOPPED;
-            if (!call_func(*cur_subprogram, SubprogramFuncNames::INIT, empty_args)) {
-                return false;
-            }
-        }
-        cur_subprogram->state_ = SubprogramStates::STARTED;
-        if (!call_func(*cur_subprogram, SubprogramFuncNames::START, empty_args)) {
+        if (!start_change_state(cur_subprogram, empty_args, empty_args)) {
             return false;
         }
     }
 
-    if (state == SubprogramStates::READY_TO_INITIALIZE) {
-        subprogram->state_ = SubprogramStates::STOPPED;
-        if (!call_func(*subprogram, SubprogramFuncNames::INIT, empty_args)) {
-            return false;
-        }
-    }
-
-    subprogram->state_ = SubprogramStates::STARTED;
-    if (!call_func(*subprogram, SubprogramFuncNames::START, args)) {
+    if (!start_change_state(subprogram, empty_args, args)) {
         return false;
     }
 
-    std::list<Subprogram*> inverse_order, pause_order_copy;
-    AnyArgs empty;
-    SubprogramStates tmp_states[] = {SubprogramStates::STARTED_WHEN_PARENT_STOPPED, SubprogramStates::PAUSED_WHEN_PARENT_STOPPED};
+    dependency_order.push_back(subprogram);
+    std::list<Subprogram*> inverse_dependency_order;
 
-    get_potential_tmp_inverse_dependency_order(subprogram, SubprogramStates::STOPPED, tmp_states, 2, inverse_order);
-
-    for (auto it = inverse_order.rbegin(); it != inverse_order.rend(); it++) {
+    for (auto it = dependency_order.begin(); it != dependency_order.end(); it++) {
         Subprogram* cur_subprogram = *it;
+        inverse_dependency_order.clear();
+        SubprogramStates target_states[] = {
+            SubprogramStates::STARTED_WHEN_PARENT_STOPPED, 
+            SubprogramStates::STARTED_WHEN_PARENT_PAUSED,
+            SubprogramStates::PAUSED_WHEN_PARENT_STOPPED
+        };
+        SubprogramStates skip_states[] = {
+            SubprogramStates::STOPPED
+        };
 
-        if (cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_STOPPED) {
-            cur_subprogram->state_ = SubprogramStates::STARTED;
-            if (!call_func(*cur_subprogram, SubprogramFuncNames::START, empty)) {
-                return false;
-            }
-        } else if (cur_subprogram->state_ == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED) {
-            cur_subprogram->state_ = SubprogramStates::STARTED;
-            if (!call_func(*cur_subprogram, SubprogramFuncNames::START, empty)) {
-                return false;
-            }
-            pause_order_copy.push_front(cur_subprogram);
-        }
-    }
+        IgnoredParentForSkipCountingRule ignore_skip_counting_parent[2];
+        ignore_skip_counting_parent[0].target_state = SubprogramStates::STARTED_WHEN_PARENT_STOPPED;
+        ignore_skip_counting_parent[0].ignored_parent = SubprogramStates::STARTED_WHEN_PARENT_PAUSED;
+        ignore_skip_counting_parent[1].target_state = SubprogramStates::PAUSED_WHEN_PARENT_STOPPED;
+        ignore_skip_counting_parent[1].ignored_parent = SubprogramStates::STARTED_WHEN_PARENT_PAUSED;
 
-    for (auto it = pause_order_copy.begin(); it != pause_order_copy.end(); it++) {
-        Subprogram* cur_subprogram = *it;
-         
-        cur_subprogram->state_ = SubprogramStates::PAUSED;
-        if (!call_func(*cur_subprogram, SubprogramFuncNames::PAUSE, empty)) {
-            return false;
+        get_target_inverse_dependency_order(
+            cur_subprogram, 
+            inverse_dependency_order, 
+            target_states, 
+            3, 
+            skip_states, 
+            1, 
+            ignore_skip_counting_parent,
+            2);
+
+        for (auto it = inverse_dependency_order.rbegin(); it != inverse_dependency_order.rend(); it++) {
+            Subprogram* cur_subprogram = *it;
+
+            bool have_pause = false, 
+                have_started_when_parent_paused = false, 
+                have_started_when_parent_stopped = false,
+                have_paused_when_parent_stopped = false;
+
+            for (ID& parent_name : cur_subprogram->info_.dependencies_) {
+                Subprogram& parent = subprograms_[parent_name];
+                if (parent.state_ == SubprogramStates::PAUSED) {
+                    have_pause = true;
+                } else if (parent.state_ == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+                    have_started_when_parent_paused = true;
+                } else if (parent.state_ == SubprogramStates::STARTED_WHEN_PARENT_STOPPED) {
+                    have_started_when_parent_stopped = true;
+                } else if (parent.state_ == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED) {
+                    have_paused_when_parent_stopped = true;
+                }
+            }
+
+            if (cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_STOPPED) {
+                if (!have_started_when_parent_stopped) {
+                    if (have_pause || have_started_when_parent_paused) {
+                        cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_PAUSED;
+                        if (!call_func(*cur_subprogram, SubprogramFuncNames::START_AS_PAUSED, empty_args)) {
+                            return false;
+                        }
+                    } else {
+                        cur_subprogram->state_ = SubprogramStates::STARTED;
+                        if (!call_func(*cur_subprogram, SubprogramFuncNames::START, empty_args)) {
+                            return false;
+                        }
+                    }    
+                }
+            } else if (cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+                if (!have_pause && !have_started_when_parent_paused) {
+                    cur_subprogram->state_ = SubprogramStates::STARTED;
+                    if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, empty_args)) {
+                        return false;
+                    }
+                }
+            } else if (cur_subprogram->state_ == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED) {
+                if (!have_started_when_parent_stopped && !have_paused_when_parent_stopped) {
+                    cur_subprogram->state_ = SubprogramStates::PAUSED;
+                    if (!call_func(*cur_subprogram, SubprogramFuncNames::START_AS_PAUSED, empty_args)) {
+                            return false;
+                    }
+                }
+            }
         }
     }
 
@@ -582,81 +706,145 @@ bool SubprogramLocator::stop(const ID &subprogram_name, AnyArgs& args)
 {
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
-    if (state != SubprogramStates::STARTED
-        && state != SubprogramStates::PAUSED
-        && state != SubprogramStates::STARTED_WHEN_PARENT_PAUSED
-        && state != SubprogramStates::STARTED_WHEN_PARENT_STOPPED
-        && state != SubprogramStates::PAUSED_WHEN_PARENT_STOPPED) {
-        return false;
-    }
 
-    if (state == SubprogramStates::STARTED_WHEN_PARENT_STOPPED
-        || state == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED) {
-        state = SubprogramStates::STOPPED;
+    if (state == SubprogramStates::STARTED) { 
+
+        AnyArgs empty_args;
+
+        SubprogramStates target_states[] = {
+            SubprogramStates::STARTED, 
+            SubprogramStates::PAUSED,
+            SubprogramStates::STARTED_WHEN_PARENT_PAUSED
+        };
+        std::deque<Subprogram*> inverse_dependency_order;
+        get_dependency_order(subprogram, target_states, 3, inverse_dependency_order, false, true);
+
+        for (auto it = inverse_dependency_order.begin(); it != inverse_dependency_order.end(); it++) {
+            Subprogram* cur_subprogram = *it;
+            if (cur_subprogram->state_ == SubprogramStates::STARTED 
+                || cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+
+                cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_STOPPED;
+                if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, empty_args)) {
+                    return false;
+
+                }
+            } else if (cur_subprogram->state_ == SubprogramStates::PAUSED) {
+
+                cur_subprogram->state_ = SubprogramStates::PAUSED_WHEN_PARENT_STOPPED;
+                if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, empty_args)) {
+                    return false;
+                }
+            }
+        }
+
+        subprogram->state_ = SubprogramStates::STOPPED;
+        if (!call_func(*subprogram, SubprogramFuncNames::STOP, args)) {
+            return false;
+        }
+        return true;
+
+    } else if (state == SubprogramStates::PAUSED || state == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+        AnyArgs empty_args;
+
+        SubprogramStates target_states[] = {
+            SubprogramStates::PAUSED,
+            SubprogramStates::STARTED_WHEN_PARENT_PAUSED
+        };
+        std::deque<Subprogram*> inverse_dependency_order;
+
+        get_dependency_order(subprogram, target_states, 2, inverse_dependency_order, false, true);
+        for (auto it = inverse_dependency_order.begin(); it != inverse_dependency_order.end(); it++) {
+            Subprogram* cur_subprogram = *it;
+            if (cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+                cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_STOPPED;
+
+                if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, empty_args)) {
+                    return false;
+                }
+            } else if (cur_subprogram->state_ == SubprogramStates::PAUSED) {
+
+                cur_subprogram->state_ = SubprogramStates::PAUSED_WHEN_PARENT_STOPPED;
+                if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, empty_args)) {
+                    return false;
+                }
+            }
+        }
+
+        subprogram->state_ = SubprogramStates::STOPPED;
+        if (!call_func(*subprogram, SubprogramFuncNames::STOP, args)) {
+            return false;
+        }
+
+        return true;
+    }
+    else if (state == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED || state == SubprogramStates::STARTED_WHEN_PARENT_STOPPED) {
+        subprogram->state_ = SubprogramStates::STOPPED;
         return true;
     }
 
-    std::deque<Subprogram*> inverse_dependency;
-    SubprogramStates states[] = {SubprogramStates::STARTED, SubprogramStates::PAUSED, SubprogramStates::STARTED_WHEN_PARENT_PAUSED};
-    
-    get_dependency_order(subprogram, states, 3, inverse_dependency, true);
-
-    for (auto it = inverse_dependency.rbegin(); it != inverse_dependency.rend(); it++) {
-        Subprogram* cur_subprogram = *it;
-        if (cur_subprogram->state_ == SubprogramStates::STARTED 
-            || cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
-            cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_STOPPED;
-        } else if (cur_subprogram->state_ == SubprogramStates::PAUSED) {
-            cur_subprogram->state_ = SubprogramStates::PAUSED_WHEN_PARENT_STOPPED;
-        }
-        if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, args)) {
-            return false;
-        }
-    }
-
-    subprogram->state_ = SubprogramStates::STOPPED;
-    if (!call_func(*subprogram, SubprogramFuncNames::STOP, args)) {
-        return false;
-    }
-    
-    return true;
+    return false;
 }
 
 bool SubprogramLocator::resume(const ID &subprogram_name, AnyArgs& args)
 {
-    Subprogram* subprogram = nullptr;
-    if (get_subprogram(subprogram_name, &subprogram) != SubprogramStates::PAUSED) {
-        return false;
-    }
-    
+   Subprogram* subprogram = nullptr;
+   SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
+   if (state != SubprogramStates::PAUSED && state != SubprogramStates::STARTED_WHEN_PARENT_PAUSED)
+       return false;
+
     std::deque<Subprogram*> dependency_order;
-    SubprogramStates states[] = {SubprogramStates::PAUSED};
-    
-    get_dependency_order(subprogram, states, 1, dependency_order);
+    SubprogramStates states[] = {SubprogramStates::PAUSED, SubprogramStates::STARTED_WHEN_PARENT_PAUSED};
+    get_dependency_order(subprogram, states, 2, dependency_order);
 
     AnyArgs empty_args;
-
     for (auto it = dependency_order.begin(); it != dependency_order.end(); it++) {
         Subprogram* cur_subprogram = *it;
-        cur_subprogram->state_ = SubprogramStates::STARTED;
-        if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, empty_args)) {
-            return false;
+        if (cur_subprogram->state_ == SubprogramStates::PAUSED 
+            || cur_subprogram->state_ == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+
+            cur_subprogram->state_ = SubprogramStates::STARTED;
+            if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, empty_args)) {
+                return false;
+            }
         }
     }
 
+    subprogram->state_ = SubprogramStates::STARTED;
     if (!call_func(*subprogram, SubprogramFuncNames::RESUME, args)) {
         return false;
     }
 
-    std::list<Subprogram*> inverse_order;
-    SubprogramStates tmp_states[] = {SubprogramStates::STARTED_WHEN_PARENT_PAUSED};
-    get_potential_tmp_inverse_dependency_order(subprogram, SubprogramStates::PAUSED, tmp_states, 1, inverse_order);
+    dependency_order.push_back(subprogram);
+    std::list<Subprogram*> inverse_dependency_order;
 
-    for (auto it = inverse_order.rbegin(); it != inverse_order.rend(); it++) {
+    for (auto it = dependency_order.begin(); it != dependency_order.end(); it++) {
         Subprogram* cur_subprogram = *it;
-        cur_subprogram->state_ = SubprogramStates::STARTED;
-        if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, empty_args)) {
-            return false;
+        SubprogramStates target_states[] = {SubprogramStates::STARTED_WHEN_PARENT_PAUSED};
+        inverse_dependency_order.clear();
+        get_target_inverse_dependency_order(cur_subprogram, inverse_dependency_order, target_states, 1, nullptr, 0, nullptr, 0);
+
+        for (auto it = inverse_dependency_order.rbegin(); it != inverse_dependency_order.rend(); it++) {
+
+            Subprogram* cur_subprogram = *it;
+            bool have_pause = false, 
+                 have_started_when_parent_paused = false;
+
+            for (ID& parent_name : cur_subprogram->info_.dependencies_) {
+                Subprogram& parent = subprograms_[parent_name];
+                if (parent.state_ == SubprogramStates::PAUSED) {
+                    have_pause = true;
+                } else if (parent.state_ == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+                    have_started_when_parent_paused = true;
+                }
+            }
+
+            if (!have_pause && !have_started_when_parent_paused) {
+                cur_subprogram->state_ = SubprogramStates::STARTED;
+                if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, empty_args)) {
+                    return false;
+                }
+            }
         }
     }
 
@@ -667,31 +855,32 @@ bool SubprogramLocator::pause(const ID &subprogram_name, AnyArgs& args)
 {
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
-    if (state != SubprogramStates::STARTED && state != SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
-        return false;
-    }
 
-    if (state == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+    if (state == SubprogramStates::STARTED) {
+        AnyArgs empty_args;
+        std::deque<Subprogram*> inverse_dependency_order;
+        SubprogramStates states[] = {SubprogramStates::STARTED};
+        get_dependency_order(subprogram, states, 1, inverse_dependency_order, false, true);
+
+        for (auto it = inverse_dependency_order.begin(); it != inverse_dependency_order.end(); it++) {
+            Subprogram* cur_subprogram = *it;
+            cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_PAUSED;
+            if (!call_func(*cur_subprogram, SubprogramFuncNames::PAUSE, empty_args)) {
+                return false;
+            }
+        }
+
+        subprogram->state_ = SubprogramStates::PAUSED;
+        if (!call_func(*subprogram, SubprogramFuncNames::PAUSE, args)) {
+            return false;
+        }
+
+        return true;
+
+    } else if (state == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
         subprogram->state_ = SubprogramStates::PAUSED;
         return true;
     }
 
-    SubprogramStates target_states[] = {SubprogramStates::STARTED};
-    std::deque<Subprogram*> inverse_dependency_order;
-    get_dependency_order(subprogram, target_states, 1, inverse_dependency_order, true);
-
-    for (auto it = inverse_dependency_order.begin(); it != inverse_dependency_order.end(); it++) {
-        Subprogram* cur_subprogram = *it;
-        cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_PAUSED;
-        if (!call_func(*cur_subprogram, SubprogramFuncNames::PAUSE, args)) {
-            return false;
-        }
-    }
-
-    subprogram->state_ = SubprogramStates::PAUSED;
-    if (!call_func(*subprogram, SubprogramFuncNames::PAUSE, args)) {
-        return false;
-    }
-
-    return true;
+    return false;
 }
