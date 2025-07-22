@@ -696,6 +696,90 @@ SCENARIO("Subprogram_Locator", "[core][locator]") {
                             }
                         }
                     }
+
+                    AND_WHEN("Check start_as_paused, Pause G, stop E") {
+                        order.clear();
+                        result = locator.pause("G");
+                        REQUIRE(result);
+                        result = locator.stop("E");
+                        REQUIRE(result);
+
+                        THEN("E stopped, G PAUSED_WHEN_PARENT_STOPPED, H STARTED_WHEN_PARENT_STOPPED") {
+                            REQUIRE(locator.get_subprogram_state("E") == SubprogramStates::STOPPED);
+                            REQUIRE(locator.get_subprogram_state("G") == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED);
+                            REQUIRE(locator.get_subprogram_state("H") == SubprogramStates::STARTED_WHEN_PARENT_STOPPED);
+                            REQUIRE(order ==
+                            "H: Pause\n"
+                            "G: Pause\n"
+                            "H: Stop\n"
+                            "G: Stop\n"
+                            "E: Stop\n");
+                        }
+
+                        AND_WHEN("Stop D") {
+                            order.clear();
+                            result = locator.stop("D");
+
+                            THEN("D stopped") {
+                                REQUIRE(result);
+                                REQUIRE(locator.get_subprogram_state("D") == SubprogramStates::STOPPED);
+                                REQUIRE(locator.get_subprogram_state("F") == SubprogramStates::STARTED_WHEN_PARENT_STOPPED);
+                                REQUIRE(order ==
+                                "F: Stop\n"
+                                "D: Stop\n");
+                            }
+
+                            AND_WHEN("start as paused E") {
+                                order.clear();
+                                result = locator.start_as_paused("E");
+                                THEN("E started as paused") {
+                                    REQUIRE(result);
+                                    REQUIRE(locator.get_subprogram_state("D") == SubprogramStates::PAUSED);
+                                    REQUIRE(locator.get_subprogram_state("E") == SubprogramStates::PAUSED);
+                                    REQUIRE(locator.get_subprogram_state("F") == SubprogramStates::STARTED_WHEN_PARENT_PAUSED);
+                                    REQUIRE(locator.get_subprogram_state("G") == SubprogramStates::PAUSED);
+                                    REQUIRE(locator.get_subprogram_state("H") == SubprogramStates::STARTED_WHEN_PARENT_PAUSED);
+                                    REQUIRE(order ==
+                                    "D: Start as paused\n"
+                                    "E: Start as paused\n"
+                                    "F: Start as paused\n"
+                                    "G: Start as paused\n"
+                                    "H: Start as paused\n");
+                                }
+                            }
+                        }
+                    }
+
+                    AND_WHEN("Check start_as_paused, stop B, stop D, start as paused D") {
+                        order.clear();
+                        result = locator.stop("B");
+                        REQUIRE(result);
+                        result = locator.stop("D");
+                        REQUIRE(result);
+                        result = locator.start_as_paused("D");
+                        std::cout << order << std::endl;
+
+                        THEN("D paused, F started as paused, H started as stopped") {
+                            REQUIRE(result);
+                            REQUIRE(locator.get_subprogram_state("D") == SubprogramStates::PAUSED);
+                            REQUIRE(locator.get_subprogram_state("F") == SubprogramStates::STARTED_WHEN_PARENT_PAUSED);
+                            REQUIRE(locator.get_subprogram_state("B") == SubprogramStates::STOPPED);
+                            REQUIRE(locator.get_subprogram_state("C") == SubprogramStates::STARTED_WHEN_PARENT_STOPPED);
+                            REQUIRE(locator.get_subprogram_state("E") == SubprogramStates::STARTED_WHEN_PARENT_STOPPED);
+                            REQUIRE(locator.get_subprogram_state("G") == SubprogramStates::STARTED_WHEN_PARENT_STOPPED);
+                            REQUIRE(locator.get_subprogram_state("H") == SubprogramStates::STARTED_WHEN_PARENT_STOPPED);
+                            REQUIRE(order == 
+                                "H: Stop\n"
+                                "G: Stop\n"
+                                "E: Stop\n"
+                                "C: Stop\n"
+                                "B: Stop\n"
+                                "F: Stop\n"
+                                "D: Stop\n"
+                                "D: Start as paused\n"
+                                "F: Start as paused\n");
+                        }
+                    }
                 }
             }
         }

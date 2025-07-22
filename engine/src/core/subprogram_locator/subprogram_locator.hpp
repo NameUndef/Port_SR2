@@ -154,6 +154,12 @@ public:
     }
 
     template <typename... ArgsT>
+    inline bool start_as_paused(const ID& subprogram_name, ArgsT&&... args)
+    {
+        return start_as_paused(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
+    }
+
+    template <typename... ArgsT>
     inline bool stop(const ID& subprogram_name, ArgsT&&... args)
     {
         return stop(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
@@ -187,6 +193,12 @@ public:
     {
         AnyArgs empty_args;
         return start(subprogram_name, empty_args);
+    }
+
+    bool start_as_paused(const ID& subprogram_name)
+    {
+        AnyArgs empty_args;
+        return start_as_paused(subprogram_name, empty_args);
     }
 
     bool stop(const ID& subprogram_name)
