@@ -3,6 +3,7 @@
 #include <queue>
 #include <set>
 #include <list>
+//#include <iostream>
 
 const AnyArgsFunc<bool> SubprogramLocator::empty_func_ = [](auto...) 
 { 
@@ -116,8 +117,103 @@ SubprogramStates SubprogramLocator::get_subprogram_state(const ID &subprogram_na
     return get_subprogram(subprogram_name, &subprogram);
 }
 
+bool SubprogramLocator::process_calls_from_queue()
+{
+    while (!call_queue_.empty()) {
+        CallOperation& operation = call_queue_.front();
+        switch (operation.index()) {
+
+            default: {
+                return false;
+            }
+            
+            case 0: {
+                AddOperation& add_op = std::get<AddOperation>(operation);
+                if (!add(add_op.info_)) {
+                    return false;
+                }
+                break;
+            }
+
+            case 1: {
+                RemoveOperation& remove_op = std::get<RemoveOperation>(operation);
+                if (!remove(remove_op.subprogram_name_)) {
+                    return false;
+                }
+                break;
+            }
+
+            case 2: {
+                BaseOperation& base_op = std::get<BaseOperation>(operation);
+                switch (base_op.func_name_) {
+
+                    default: {
+                        return false;
+                    }
+
+                    case SubprogramFuncNames::INIT: {
+                        if (!init(base_op.subprogram_name_, base_op.args_)) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case SubprogramFuncNames::DEINIT: {
+                        if (!deinit(base_op.subprogram_name_, base_op.args_)) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case SubprogramFuncNames::START: {
+                        if (!start(base_op.subprogram_name_, base_op.args_)) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case SubprogramFuncNames::START_AS_PAUSED: {
+                        if (!start_as_paused(base_op.subprogram_name_, base_op.args_)) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case SubprogramFuncNames::STOP: {
+                        if (!stop(base_op.subprogram_name_, base_op.args_)) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case SubprogramFuncNames::RESUME: {
+                        if (!resume(base_op.subprogram_name_, base_op.args_)) {
+                            return false;
+                        }
+                        break;
+                    }
+                    case SubprogramFuncNames::PAUSE: {
+                        if (!pause(base_op.subprogram_name_, base_op.args_)) {
+                            return false;
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+
+        call_queue_.pop();
+    }
+
+    return true;
+}
+
+
 bool SubprogramLocator::add(const SubprogramInfo &info)
 {
+    //std::cout <<  "add " << std::get<0>(info.name_) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(AddOperation{info});
+        return true;
+    }
+
     bool it_was_undefined = false;
     Subprogram undefined_subprogram;
 
@@ -175,14 +271,25 @@ bool SubprogramLocator::add(const SubprogramInfo &info)
         }
     }
 
+    //std::cout <<  "add " << std::get<0>(info.name_) << " end" << std::endl;
+
     return true;
 }
 
 bool SubprogramLocator::remove(const ID& subprogram_name)
 {
+    //std::cout <<  "remove " << std::get<0>(subprogram_name) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(RemoveOperation{subprogram_name});
+        return true;
+    }
+    is_on_call_ = true;
+
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
     if (state == SubprogramStates::UNDEFINED || state == SubprogramStates::NOT_EXISTED) {
+        is_on_call_ = false;
         return false;
     }
 
@@ -192,6 +299,7 @@ bool SubprogramLocator::remove(const ID& subprogram_name)
 
     for (auto it = inverse_dependency_order.begin(); it != inverse_dependency_order.end(); it++) {
         if (!deinit_change_states(*it, empty_args)) {
+            is_on_call_ = false;
             return false;
         }
 
@@ -199,7 +307,10 @@ bool SubprogramLocator::remove(const ID& subprogram_name)
         cur_subprogram->state_ = SubprogramStates::DEFINED_WITHOUT_DEFINED_PARENT;
     }
 
-    deinit_change_states(subprogram, empty_args);
+    if (!deinit_change_states(subprogram, empty_args)) {
+        is_on_call_ = false;
+        return false;
+    }
     subprogram->state_ = SubprogramStates::UNDEFINED;
     
     for (auto it = subprogram->info_.dependencies_.begin(); it != subprogram->info_.dependencies_.end(); it++) {
@@ -228,6 +339,13 @@ bool SubprogramLocator::remove(const ID& subprogram_name)
         vertexes_to_subprogram_names_.erase(subprogram->vertex_);
         subprograms_.erase(subprogram->info_.name_);
     }
+
+    is_on_call_ = false;
+    if (!process_calls_from_queue()) {
+        return false;
+    }
+
+    //std::cout <<  "remove " << std::get<0>(subprogram_name) << " end" << std::endl;
 
     return true;
 }
@@ -306,9 +424,19 @@ bool SubprogramLocator::call_func(Subprogram &subprogram, SubprogramFuncNames ha
 
 bool SubprogramLocator::init(const ID &subprogram_name, AnyArgs& args)
 {
+    //std::cout <<  "init " << std::get<0>(subprogram_name) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(BaseOperation{subprogram_name, args, SubprogramFuncNames::INIT});
+        return true;
+    }
+    is_on_call_ = true;
+
     Subprogram* subprogram = nullptr;
-    if (get_subprogram(subprogram_name, &subprogram) != SubprogramStates::READY_TO_INITIALIZE)
+    if (get_subprogram(subprogram_name, &subprogram) != SubprogramStates::READY_TO_INITIALIZE) {
+        is_on_call_ = false;
         return false;
+    }
 
     std::deque<Subprogram*> dependency_order;
     SubprogramStates states[] = {SubprogramStates::READY_TO_INITIALIZE};
@@ -321,14 +449,23 @@ bool SubprogramLocator::init(const ID &subprogram_name, AnyArgs& args)
         
         cur_subprogram->state_ = SubprogramStates::STOPPED;
         if (!call_func(*cur_subprogram, SubprogramFuncNames::INIT, empty_args)) {
+            is_on_call_ = false;
             return false;
         }
     }
 
     subprogram->state_ = SubprogramStates::STOPPED;
     if (!call_func(*subprogram, SubprogramFuncNames::INIT, args)) {
+        is_on_call_ = false;
         return false;
     }
+
+    is_on_call_ = false;
+    if (!process_calls_from_queue()) {
+        return false;
+    }
+
+    //std::cout <<  "init " << std::get<0>(subprogram_name) << " end" << std::endl;
 
     return true;
 }
@@ -359,6 +496,14 @@ bool SubprogramLocator::deinit_change_states(Subprogram* cur_subprogram, AnyArgs
 
 bool SubprogramLocator::deinit(const ID &subprogram_name, AnyArgs& args)
 {
+    //std::cout <<  "deinit " << std::get<0>(subprogram_name) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(BaseOperation{subprogram_name, args, SubprogramFuncNames::DEINIT});
+        return true;
+    }
+    is_on_call_ = true;
+
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
     
@@ -385,13 +530,22 @@ bool SubprogramLocator::deinit(const ID &subprogram_name, AnyArgs& args)
 
     for (auto it = inverse_dependency_order.begin(); it != inverse_dependency_order.end(); it++) {
         if (!deinit_change_states(*it, empty_args)) {
+            is_on_call_ = false;
             return false;
         }
     }
 
     if (!deinit_change_states(subprogram, args)) {
+        is_on_call_ = false;
         return false;
     }
+
+    is_on_call_ = false;
+    if (!process_calls_from_queue()) {
+        return false;
+    }
+
+    //std::cout <<  "deinit " << std::get<0>(subprogram_name) << " end" << std::endl;
 
     return true;
 }
@@ -583,6 +737,14 @@ bool SubprogramLocator::start_change_state(Subprogram* cur_subprogram, AnyArgs& 
 
 bool SubprogramLocator::start(const ID &subprogram_name, AnyArgs& args)
 {
+    //std::cout <<  "start " << std::get<0>(subprogram_name) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(BaseOperation{subprogram_name, args, SubprogramFuncNames::START});
+        return true;
+    }
+    is_on_call_ = true;
+
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
     if (state != SubprogramStates::READY_TO_INITIALIZE 
@@ -610,11 +772,13 @@ bool SubprogramLocator::start(const ID &subprogram_name, AnyArgs& args)
     for (auto it = dependency_order.begin(); it != dependency_order.end(); it++) {
         Subprogram* cur_subprogram = *it;
         if (!start_change_state(cur_subprogram, empty_args, empty_args)) {
+            is_on_call_ = false;
             return false;
         }
     }
 
     if (!start_change_state(subprogram, empty_args, args)) {
+        is_on_call_ = false;
         return false;
     }
 
@@ -675,11 +839,13 @@ bool SubprogramLocator::start(const ID &subprogram_name, AnyArgs& args)
                     if (have_pause || have_started_when_parent_paused) {
                         cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_PAUSED;
                         if (!call_func(*cur_subprogram, SubprogramFuncNames::START_AS_PAUSED, empty_args)) {
+                            is_on_call_ = false;
                             return false;
                         }
                     } else {
                         cur_subprogram->state_ = SubprogramStates::STARTED;
                         if (!call_func(*cur_subprogram, SubprogramFuncNames::START, empty_args)) {
+                            is_on_call_ = false;
                             return false;
                         }
                     }    
@@ -688,6 +854,7 @@ bool SubprogramLocator::start(const ID &subprogram_name, AnyArgs& args)
                 if (!have_pause && !have_started_when_parent_paused) {
                     cur_subprogram->state_ = SubprogramStates::STARTED;
                     if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, empty_args)) {
+                        is_on_call_ = false;
                         return false;
                     }
                 }
@@ -695,21 +862,38 @@ bool SubprogramLocator::start(const ID &subprogram_name, AnyArgs& args)
                 if (!have_started_when_parent_stopped && !have_paused_when_parent_stopped) {
                     cur_subprogram->state_ = SubprogramStates::PAUSED;
                     if (!call_func(*cur_subprogram, SubprogramFuncNames::START_AS_PAUSED, empty_args)) {
-                            return false;
+                        is_on_call_ = false;
+                        return false;
                     }
                 }
             }
         }
     }
 
+    is_on_call_ = false;
+    if (!process_calls_from_queue()) {
+        return false;
+    }
+
+    //std::cout <<  "start " << std::get<0>(subprogram_name) << " end" << std::endl;
+
     return true;
 }
 
 bool SubprogramLocator::start_as_paused(const ID &subprogram_name, AnyArgs &args)
 {
+    //std::cout <<  "start_as_paused " << std::get<0>(subprogram_name) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(BaseOperation{subprogram_name, args, SubprogramFuncNames::START_AS_PAUSED});
+        return true;
+    }
+    is_on_call_ = true;
+
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
     if (state != SubprogramStates::READY_TO_INITIALIZE && state != SubprogramStates::STOPPED) {
+        is_on_call_ = false;
         return false;
     }
 
@@ -724,6 +908,7 @@ bool SubprogramLocator::start_as_paused(const ID &subprogram_name, AnyArgs &args
         if (cur_subprogram->state_ == SubprogramStates::READY_TO_INITIALIZE) {
             cur_subprogram->state_ = SubprogramStates::STOPPED;
             if (!call_func(*cur_subprogram, SubprogramFuncNames::INIT, empty_args)) {
+                is_on_call_ = false;
                 return false;
             }
         }
@@ -731,6 +916,7 @@ bool SubprogramLocator::start_as_paused(const ID &subprogram_name, AnyArgs &args
         if (cur_subprogram->state_ == SubprogramStates::STOPPED) {
             cur_subprogram->state_ = SubprogramStates::PAUSED;
             if (!call_func(*cur_subprogram, SubprogramFuncNames::START_AS_PAUSED, empty_args)) {
+                is_on_call_ = false;
                 return false;
             }
         }
@@ -739,6 +925,7 @@ bool SubprogramLocator::start_as_paused(const ID &subprogram_name, AnyArgs &args
     if (subprogram->state_ == SubprogramStates::READY_TO_INITIALIZE) {
         subprogram->state_ = SubprogramStates::STOPPED;
         if (!call_func(*subprogram, SubprogramFuncNames::INIT, empty_args)) {
+            is_on_call_ = false;
             return false;
         }
     }
@@ -746,6 +933,7 @@ bool SubprogramLocator::start_as_paused(const ID &subprogram_name, AnyArgs &args
     if (subprogram->state_ == SubprogramStates::STOPPED) {
         subprogram->state_ = SubprogramStates::PAUSED;
         if (!call_func(*subprogram, SubprogramFuncNames::START_AS_PAUSED, args)) {
+            is_on_call_ = false;
             return false;
         }
     }
@@ -772,16 +960,32 @@ bool SubprogramLocator::start_as_paused(const ID &subprogram_name, AnyArgs &args
                 cur_subprogram->state_ = SubprogramStates::PAUSED;
             }
             if (!call_func(*cur_subprogram, SubprogramFuncNames::START_AS_PAUSED, empty_args)) {
+                is_on_call_ = false;
                 return false;
             }
         }
     }
+
+    is_on_call_ = false;
+    if (!process_calls_from_queue()) {
+        return false;
+    }
+
+    //std::cout <<  "start_as_paused " << std::get<0>(subprogram_name) << " end" << std::endl;
 
     return true;
 }
 
 bool SubprogramLocator::stop(const ID &subprogram_name, AnyArgs& args)
 {
+    //std::cout <<  "stop " << std::get<0>(subprogram_name) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(BaseOperation{subprogram_name, args, SubprogramFuncNames::STOP});
+        return true;
+    }
+    is_on_call_ = true;
+
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
 
@@ -804,6 +1008,7 @@ bool SubprogramLocator::stop(const ID &subprogram_name, AnyArgs& args)
 
                 cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_STOPPED;
                 if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, empty_args)) {
+                    is_on_call_ = false;
                     return false;
 
                 }
@@ -811,6 +1016,7 @@ bool SubprogramLocator::stop(const ID &subprogram_name, AnyArgs& args)
 
                 cur_subprogram->state_ = SubprogramStates::PAUSED_WHEN_PARENT_STOPPED;
                 if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, empty_args)) {
+                    is_on_call_ = false;
                     return false;
                 }
             }
@@ -818,9 +1024,9 @@ bool SubprogramLocator::stop(const ID &subprogram_name, AnyArgs& args)
 
         subprogram->state_ = SubprogramStates::STOPPED;
         if (!call_func(*subprogram, SubprogramFuncNames::STOP, args)) {
+            is_on_call_ = false;
             return false;
         }
-        return true;
 
     } else if (state == SubprogramStates::PAUSED || state == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
         AnyArgs empty_args;
@@ -838,12 +1044,14 @@ bool SubprogramLocator::stop(const ID &subprogram_name, AnyArgs& args)
                 cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_STOPPED;
 
                 if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, empty_args)) {
+                    is_on_call_ = false;
                     return false;
                 }
             } else if (cur_subprogram->state_ == SubprogramStates::PAUSED) {
 
                 cur_subprogram->state_ = SubprogramStates::PAUSED_WHEN_PARENT_STOPPED;
                 if (!call_func(*cur_subprogram, SubprogramFuncNames::STOP, empty_args)) {
+                    is_on_call_ = false;
                     return false;
                 }
             }
@@ -851,25 +1059,43 @@ bool SubprogramLocator::stop(const ID &subprogram_name, AnyArgs& args)
 
         subprogram->state_ = SubprogramStates::STOPPED;
         if (!call_func(*subprogram, SubprogramFuncNames::STOP, args)) {
+            is_on_call_ = false;
             return false;
         }
-
-        return true;
     }
     else if (state == SubprogramStates::PAUSED_WHEN_PARENT_STOPPED || state == SubprogramStates::STARTED_WHEN_PARENT_STOPPED) {
         subprogram->state_ = SubprogramStates::STOPPED;
-        return true;
+    } else {
+        is_on_call_ = false;
+        return false;
     }
 
-    return false;
+    is_on_call_ = false;
+    if (!process_calls_from_queue()) {
+        return false;
+    }
+
+    //std::cout <<  "stop " << std::get<0>(subprogram_name) << " end" << std::endl;
+
+    return true;
 }
 
 bool SubprogramLocator::resume(const ID &subprogram_name, AnyArgs& args)
 {
+    //std::cout <<  "resume " << std::get<0>(subprogram_name) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(BaseOperation{subprogram_name, args, SubprogramFuncNames::RESUME});
+        return true;
+    }
+    is_on_call_ = true;
+
    Subprogram* subprogram = nullptr;
    SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
-   if (state != SubprogramStates::PAUSED && state != SubprogramStates::STARTED_WHEN_PARENT_PAUSED)
-       return false;
+   if (state != SubprogramStates::PAUSED && state != SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
+        is_on_call_ = false;
+        return false;
+   }
 
     std::deque<Subprogram*> dependency_order;
     SubprogramStates states[] = {SubprogramStates::PAUSED, SubprogramStates::STARTED_WHEN_PARENT_PAUSED};
@@ -883,6 +1109,7 @@ bool SubprogramLocator::resume(const ID &subprogram_name, AnyArgs& args)
 
             cur_subprogram->state_ = SubprogramStates::STARTED;
             if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, empty_args)) {
+                is_on_call_ = false;
                 return false;
             }
         }
@@ -890,6 +1117,7 @@ bool SubprogramLocator::resume(const ID &subprogram_name, AnyArgs& args)
 
     subprogram->state_ = SubprogramStates::STARTED;
     if (!call_func(*subprogram, SubprogramFuncNames::RESUME, args)) {
+        is_on_call_ = false;
         return false;
     }
 
@@ -920,17 +1148,33 @@ bool SubprogramLocator::resume(const ID &subprogram_name, AnyArgs& args)
             if (!have_pause && !have_started_when_parent_paused) {
                 cur_subprogram->state_ = SubprogramStates::STARTED;
                 if (!call_func(*cur_subprogram, SubprogramFuncNames::RESUME, empty_args)) {
+                    is_on_call_ = false;
                     return false;
                 }
             }
         }
     }
 
+    is_on_call_ = false;
+    if (!process_calls_from_queue()) {
+        return false;
+    }
+
+    //std::cout <<  "resume " << std::get<0>(subprogram_name) << " end" << std::endl;
+
     return true;
 }
 
 bool SubprogramLocator::pause(const ID &subprogram_name, AnyArgs& args)
 {
+    //std::cout <<  "pause " << std::get<0>(subprogram_name) << " begin" << std::endl;
+
+    if (is_on_call_) {
+        call_queue_.emplace(BaseOperation{subprogram_name, args, SubprogramFuncNames::RESUME});
+        return true;
+    }
+    is_on_call_ = true;
+
     Subprogram* subprogram = nullptr;
     SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
 
@@ -944,21 +1188,31 @@ bool SubprogramLocator::pause(const ID &subprogram_name, AnyArgs& args)
             Subprogram* cur_subprogram = *it;
             cur_subprogram->state_ = SubprogramStates::STARTED_WHEN_PARENT_PAUSED;
             if (!call_func(*cur_subprogram, SubprogramFuncNames::PAUSE, empty_args)) {
+                is_on_call_ = false;
                 return false;
             }
         }
 
         subprogram->state_ = SubprogramStates::PAUSED;
         if (!call_func(*subprogram, SubprogramFuncNames::PAUSE, args)) {
+            is_on_call_ = false;
             return false;
         }
 
-        return true;
-
     } else if (state == SubprogramStates::STARTED_WHEN_PARENT_PAUSED) {
         subprogram->state_ = SubprogramStates::PAUSED;
-        return true;
+
+    } else {
+        is_on_call_ = false;
+        return false;
     }
 
-    return false;
+    is_on_call_ = false;
+    if (!process_calls_from_queue()) {
+        return false;
+    }
+
+    //std::cout <<  "pause " << std::get<0>(subprogram_name) << " end" << std::endl;
+
+    return true;
 }

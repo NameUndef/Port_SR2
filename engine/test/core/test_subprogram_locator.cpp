@@ -757,7 +757,6 @@ SCENARIO("Subprogram_Locator", "[core][locator]") {
                         result = locator.stop("D");
                         REQUIRE(result);
                         result = locator.start_as_paused("D");
-                        std::cout << order << std::endl;
 
                         THEN("D paused, F started as paused, H started as stopped") {
                             REQUIRE(result);

@@ -9,6 +9,7 @@
 #include <vector>
 #include <unordered_map>
 #include <list>
+#include <queue>
 
 enum class SubprogramFuncNames {
     INIT,
@@ -103,9 +104,9 @@ enum class SubprogramStates {
     STOPPED,
     STARTED,
     PAUSED,
-    STARTED_WHEN_PARENT_PAUSED, // [START] -> PAUSE ; [PAUSE] -> RESUME
-    STARTED_WHEN_PARENT_STOPPED, // [START] -> STOP ; [STOP] -> START
-    PAUSED_WHEN_PARENT_STOPPED // [PAUSE] -> STOP ; [STOP] -> START -> PAUSE
+    STARTED_WHEN_PARENT_PAUSED,
+    STARTED_WHEN_PARENT_STOPPED,
+    PAUSED_WHEN_PARENT_STOPPED
 };
 
 class SubprogramLocator {
@@ -116,10 +117,28 @@ class SubprogramLocator {
         int vertex_;
     };
 
+    struct BaseOperation {
+        ID subprogram_name_;
+        AnyArgs args_;
+        SubprogramFuncNames func_name_;
+    };
+
+    struct AddOperation {
+        SubprogramInfo info_;
+    };
+
+    struct RemoveOperation {
+        ID subprogram_name_;
+    };
+
+    using CallOperation = std::variant<AddOperation, RemoveOperation, BaseOperation>;
+
     static const AnyArgsFunc<bool> empty_func_;
-    std::unordered_map<ID, Subprogram> subprograms_;
-    Graph dependencies_graph_, inverse_dependencies_graph_;
-    std::unordered_map<int, ID> vertexes_to_subprogram_names_;
+    std::unordered_map<ID, Subprogram> subprograms_{};
+    Graph dependencies_graph_{}, inverse_dependencies_graph_{};
+    std::unordered_map<int, ID> vertexes_to_subprogram_names_{};
+    std::queue<CallOperation> call_queue_{};
+    bool is_on_call_{false};
     
 public:
     SubprogramStates get_subprogram_state(const ID& subprogram_name);
@@ -250,6 +269,7 @@ private:
         std::size_t ignore_parent_for_skip_counting_rule_count);
     bool deinit_change_states(Subprogram* cur_subprogram, AnyArgs& cur_args);
     bool start_change_state(Subprogram* cur_subprogram, AnyArgs& init_args, AnyArgs& start_args);
+    bool process_calls_from_queue();
 };
 
 #endif  // INCLUDE_SUBPROGRAM_LOCATOR_HPP_
