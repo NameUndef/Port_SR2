@@ -23,12 +23,12 @@ enum class SubprogramFuncNames {
 
 constexpr std::size_t FUNCS_COUNT = 7;
 
-using DefaultArgs = AnyArgs[FUNCS_COUNT];
+using DefaultArgs = std::vector<AnyArgs>;
 
 class SubprogramInfo {
     friend class SubprogramLocator;
 private:
-    AnyArgsFunc<bool> funcs_[FUNCS_COUNT];
+    std::vector<AnyArgsFunc<bool>> funcs_;
     DefaultArgs default_args_;
     std::vector<ID> dependencies_;
     ID name_;
@@ -36,9 +36,14 @@ private:
 public:
     SubprogramInfo()
     :
+        funcs_(),
+        default_args_(),
         dependencies_(),
         name_("unnamed_subprogram") 
     {
+        funcs_.resize(FUNCS_COUNT);
+        default_args_.resize(FUNCS_COUNT);
+
         std::function<bool(AnyArgs&)> undefined_func;
         for (std::size_t i = 0; i < FUNCS_COUNT; ++i) {
             funcs_[i] = undefined_func;
@@ -54,6 +59,7 @@ public:
     void set_default_args(SubprogramFuncNames func_name, const AnyArgs& args)
     {
         default_args_[static_cast<std::size_t>(func_name)] = args;
+        default_args_[static_cast<std::size_t>(func_name)].reserve(args.size() + 1);
     } 
 
     void set_func(SubprogramFuncNames func_name, const AnyArgsFunc<bool>& func, const AnyArgs& default_args) 
@@ -65,7 +71,8 @@ public:
     template <typename... ArgsT>
     void set_default_args(SubprogramFuncNames func_name, ArgsT&&... args)
     {
-        default_args_[static_cast<std::size_t>(func_name)] = make_any_args(std::forward<ArgsT>(args)...);
+        default_args_[static_cast<std::size_t>(func_name)] = std::move(make_any_args(std::forward<ArgsT>(args)...));
+        default_args_[static_cast<std::size_t>(func_name)].reserve(sizeof...(args) + 1);
     }
 
     template <typename... ArgsT>
@@ -112,9 +119,11 @@ enum class SubprogramStates {
 class SubprogramLocator {
 
     struct Subprogram {
-        SubprogramInfo info_;
-        SubprogramStates state_;
-        int vertex_;
+        std::any data_{}; // output data
+        std::unordered_map<ID, std::any*> parents_data_{};
+        SubprogramInfo info_{};
+        SubprogramStates state_{SubprogramStates::NOT_EXISTED};
+        int vertex_{0};
     };
 
     struct BaseOperation {
@@ -138,6 +147,7 @@ class SubprogramLocator {
     Graph dependencies_graph_{}, inverse_dependencies_graph_{};
     std::unordered_map<int, ID> vertexes_to_subprogram_names_{};
     std::queue<CallOperation> call_queue_{};
+    Subprogram* current_subprogram_{nullptr};
     bool is_on_call_{false};
     
 public:
@@ -145,6 +155,17 @@ public:
 
     bool add(const SubprogramInfo& info);
     bool remove(const ID& subprogram_name);
+
+    bool set_default_args(const ID& subprogram_name, SubprogramFuncNames func_name, const AnyArgs& args);
+    bool set_default_args(const ID& subprogram_name, SubprogramFuncNames func_name, AnyArgs&& args);
+    template <typename... ArgsT>
+    bool set_default_args(const ID& subprogram_name, SubprogramFuncNames func_name, ArgsT&&... args)
+    {
+        return set_default_args(subprogram_name, func_name, std::move(make_any_args(std::forward<ArgsT>(args)...)));
+    }
+
+    ReturnOrErrorCode<std::unordered_map<ID, std::any*>*> get_parents_data();
+    ReturnOrErrorCode<std::any*> get_data();
 
     bool init(const ID& subprogram_name, AnyArgs& args);
     bool deinit(const ID& subprogram_name, AnyArgs& args);

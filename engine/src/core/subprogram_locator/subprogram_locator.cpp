@@ -41,19 +41,18 @@ bool SubprogramLocator::add_new_subprogram(const SubprogramInfo& info, bool is_u
     dependencies_graph_.add_vertex(new_vertex_id);
     vertexes_to_subprogram_names_[new_vertex_id] = info.name_;
 
-    subprograms_[info.name_] = Subprogram{
-        info,
-        is_undefined_subprogram? SubprogramStates::UNDEFINED : SubprogramStates::DEFINED_WITHOUT_DEFINED_PARENT,
-        new_vertex_id
-    };
-    
-    SubprogramInfo& subprogram_info = subprograms_[info.name_].info_;
+    Subprogram new_subprogram;
+    new_subprogram.info_ = info;
+    new_subprogram.state_ = is_undefined_subprogram? SubprogramStates::UNDEFINED : SubprogramStates::DEFINED_WITHOUT_DEFINED_PARENT;
+    new_subprogram.vertex_ = new_vertex_id;
 
     for (std::size_t i = 0; i < FUNCS_COUNT; ++i) {
-        if (!subprogram_info.funcs_[i]) {
-            subprogram_info.funcs_[i] = empty_func_;
+        if (!new_subprogram.info_.funcs_[i]) {
+            new_subprogram.info_.funcs_[i] = empty_func_;
         }
     }
+
+    subprograms_[info.name_] = std::move(new_subprogram);
 
     return true;
 }
@@ -255,6 +254,7 @@ bool SubprogramLocator::add(const SubprogramInfo &info)
 
         dependencies_graph_.add_edge(subprogram.vertex_, subprograms_[dependency].vertex_);
         inverse_dependencies_graph_.add_edge(subprograms_[dependency].vertex_, subprogram.vertex_);
+        subprogram.parents_data_[dependency] = &subprograms_[dependency].data_;
     }
 
     if (it_was_undefined && get_return(dependencies_graph_.is_have_structure(subprogram.vertex_, CheckStructureCommand::CYCLE))) {
@@ -350,6 +350,54 @@ bool SubprogramLocator::remove(const ID& subprogram_name)
     return true;
 }
 
+bool SubprogramLocator::set_default_args(const ID &subprogram_name, SubprogramFuncNames func_name, const AnyArgs &args)
+{
+    Subprogram* subprogram = nullptr;
+    SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
+    if (state == SubprogramStates::UNDEFINED || state == SubprogramStates::NOT_EXISTED) {
+        return false;
+    }
+
+    auto& args_place = subprogram->info_.default_args_[static_cast<std::size_t>(func_name)];
+    args_place = args;
+    args_place.reserve(args_place.size() + 1);
+
+    return true;
+}
+
+bool SubprogramLocator::set_default_args(const ID &subprogram_name, SubprogramFuncNames func_name, AnyArgs&& args)
+{
+    Subprogram* subprogram = nullptr;
+    SubprogramStates state = get_subprogram(subprogram_name, &subprogram);
+    if (state == SubprogramStates::UNDEFINED || state == SubprogramStates::NOT_EXISTED) {
+        return false;
+    }
+    
+    auto& args_place = subprogram->info_.default_args_[static_cast<std::size_t>(func_name)];
+    args_place = std::move(args);
+    args_place.reserve(args_place.size() + 1);
+
+    return true;
+}
+
+ReturnOrErrorCode<std::unordered_map<ID, std::any*>*> SubprogramLocator::get_parents_data()
+{
+    if (!current_subprogram_) {
+        return ErrorCode{0, -1};
+    }
+
+    return &current_subprogram_->parents_data_;
+}
+
+ReturnOrErrorCode<std::any*> SubprogramLocator::get_data()
+{
+    if (!current_subprogram_) {
+        return ErrorCode{0, -2};
+    }
+
+    return &current_subprogram_->data_;
+}
+
 void SubprogramLocator::get_dependency_order(
     Subprogram* subprogram, 
     SubprogramStates* target_states, 
@@ -408,6 +456,7 @@ bool SubprogramLocator::call_func(Subprogram &subprogram, SubprogramFuncNames ha
     AnyArgs empty_args;
     AnyArgs* default_args = &subprogram.info_.default_args_[static_cast<std::size_t>(handler_name)];
     AnyArgs* target_args = &empty_args;
+    current_subprogram_ = &subprogram;
 
     if (!args.empty()) {
         target_args = &args;
@@ -415,10 +464,16 @@ bool SubprogramLocator::call_func(Subprogram &subprogram, SubprogramFuncNames ha
         target_args = default_args;
     }
 
+    target_args->push_back(this);
+
     if (!get_return(call_any_args_func(subprogram.info_.funcs_[static_cast<std::size_t>(handler_name)], *target_args))) {
+        current_subprogram_ = nullptr;
+        target_args->pop_back();
         return false;
     }
 
+    current_subprogram_ = nullptr;
+    target_args->pop_back();
     return true;
 }
 

@@ -47,6 +47,50 @@ SCENARIO("Subprogram_Locator", "[core][locator]") {
                 }
             }
         }
+        WHEN("Make graph with setting arguments and parents data") {
+            std::string res_str;
+            SubprogramInfo A, B, C;
+            A.set_name("A");
+            B.set_name("B");
+            C.set_name("C");
+            C.add_dependency("A");
+            C.add_dependency("B");
+            
+            auto func_ab = make_any_args_func<const std::string&, SubprogramLocator*>(
+                [](auto value, SubprogramLocator* locator) {
+                    *get_return(locator->get_data()) = value;
+                    return true;
+                });
+                
+            auto func_c = make_any_args_func<SubprogramLocator*>(
+                [&res_str](SubprogramLocator* locator) {
+                    auto parents_data = get_return(locator->get_parents_data());
+                    res_str += std::any_cast<std::string>(*parents_data->at("A"));
+                    res_str += std::any_cast<std::string>(*parents_data->at("B"));
+                    return true;
+                });
+
+            A.set_func(SubprogramFuncNames::INIT, func_ab);
+            B.set_func(SubprogramFuncNames::INIT, func_ab);
+            C.set_func(SubprogramFuncNames::INIT, func_c);
+        
+            bool result = subprogram_locator.add(A);
+            REQUIRE(result);
+            result = subprogram_locator.add(B);
+            REQUIRE(result);
+            result = subprogram_locator.add(C);
+            REQUIRE(result);
+            result = subprogram_locator.set_default_args("A", SubprogramFuncNames::INIT, std::string("A"));
+            REQUIRE(result);
+            result = subprogram_locator.set_default_args("B", SubprogramFuncNames::INIT, std::string("B"));
+            REQUIRE(result);
+            result = subprogram_locator.init("C");
+            REQUIRE(result);
+            
+            THEN("res_str is AB") {
+                REQUIRE(res_str == "AB");
+            }
+        }
     }
     GIVEN("Subprogram graph") {
         SubprogramLocator locator;
@@ -76,7 +120,7 @@ SCENARIO("Subprogram_Locator", "[core][locator]") {
         H.add_dependency("F");
 
         std::string order;
-        auto func = make_any_args_func<const std::string&>([&order](auto value) {order += value; order.push_back('\n'); return true;});
+        auto func = make_any_args_func<const std::string&, SubprogramLocator*>([&order](auto value, auto) {order += value; order.push_back('\n'); return true;});
 
         A.set_func(SubprogramFuncNames::INIT, func, std::string("A: Init"));
         B.set_func(SubprogramFuncNames::INIT, func, std::string("B: Init"));
