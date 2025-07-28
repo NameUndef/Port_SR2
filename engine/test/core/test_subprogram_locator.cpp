@@ -58,13 +58,13 @@ SCENARIO("Subprogram_Locator", "[core][locator]") {
             
             auto func_ab = make_any_args_func<const std::string&, SubprogramLocator*>(
                 [](auto value, SubprogramLocator* locator) {
-                    *get_return(locator->get_data()) = value;
+                    *locator->get_data() = value;
                     return true;
                 });
-                
+
             auto func_c = make_any_args_func<SubprogramLocator*>(
                 [&res_str](SubprogramLocator* locator) {
-                    auto parents_data = get_return(locator->get_parents_data());
+                    auto parents_data = locator->get_parents_data();
                     res_str += std::any_cast<std::string>(*parents_data->at("A"));
                     res_str += std::any_cast<std::string>(*parents_data->at("B"));
                     return true;

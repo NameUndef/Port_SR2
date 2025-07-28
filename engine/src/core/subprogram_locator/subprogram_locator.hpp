@@ -164,8 +164,8 @@ public:
         return set_default_args(subprogram_name, func_name, std::move(make_any_args(std::forward<ArgsT>(args)...)));
     }
 
-    ReturnOrErrorCode<std::unordered_map<ID, std::any*>*> get_parents_data();
-    ReturnOrErrorCode<std::any*> get_data();
+    std::unordered_map<ID, std::any*>* get_parents_data();
+    std::any* get_data();
 
     bool init(const ID& subprogram_name, AnyArgs& args);
     bool deinit(const ID& subprogram_name, AnyArgs& args);

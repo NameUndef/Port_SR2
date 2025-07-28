@@ -380,19 +380,19 @@ bool SubprogramLocator::set_default_args(const ID &subprogram_name, SubprogramFu
     return true;
 }
 
-ReturnOrErrorCode<std::unordered_map<ID, std::any*>*> SubprogramLocator::get_parents_data()
+std::unordered_map<ID, std::any*>* SubprogramLocator::get_parents_data()
 {
     if (!current_subprogram_) {
-        return ErrorCode{0, -1};
+        return nullptr;
     }
 
     return &current_subprogram_->parents_data_;
 }
 
-ReturnOrErrorCode<std::any*> SubprogramLocator::get_data()
+std::any* SubprogramLocator::get_data()
 {
     if (!current_subprogram_) {
-        return ErrorCode{0, -2};
+        return nullptr;
     }
 
     return &current_subprogram_->data_;
