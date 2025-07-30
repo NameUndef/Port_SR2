@@ -91,6 +91,7 @@ set(ENGINE_LIB_NAME "engine")
     set(GRAPH_LIB_NAME "graph")
     set(CORE_LIB_NAME "core")
         set(SUBPROGRAM_LOCATOR_LIB_NAME "subprogram_locator")
+        set(SDL_RUNTIME_MANAGER_LIB_NAME "sdl_runtime_manager")
 
 set(TEST_ENGINE_LIB_NAME "test_engine")    
     set(TEST_INNER_LIB_NAME "test_inner")
@@ -98,7 +99,10 @@ set(TEST_ENGINE_LIB_NAME "test_engine")
 
 set(TEST_APP_NAME "run_test_engine")
 
+set(LAUNCHER_APP_NAME "launcher")
+
 ## ---------- SUBDIRS ---------- ##
 
 add_subdirectory("engine")
 add_subdirectory("apps/test_app")
+add_subdirectory("apps/launcher")

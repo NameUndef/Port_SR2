@@ -3,6 +3,8 @@
 #include "any_args_func.hpp"
 #include <iostream>
 
+using namespace core;
+
 SCENARIO("Subprogram_Locator", "[core][locator]") {
     GIVEN("Subprogram Locator") {
         SubprogramLocator subprogram_locator;

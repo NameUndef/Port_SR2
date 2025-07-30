@@ -5,6 +5,8 @@
 #include <list>
 //#include <iostream>
 
+namespace core {
+
 const AnyArgsFunc<bool> SubprogramLocator::empty_func_ = [](auto...) 
 { 
     return true; 
@@ -1270,4 +1272,6 @@ bool SubprogramLocator::pause(const ID &subprogram_name, AnyArgs& args)
     //std::cout <<  "pause " << std::get<0>(subprogram_name) << " end" << std::endl;
 
     return true;
+}
+
 }

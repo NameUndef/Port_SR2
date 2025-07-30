@@ -11,6 +11,8 @@
 #include <list>
 #include <queue>
 
+namespace core {
+
 enum class SubprogramFuncNames {
     INIT,
     DEINIT,
@@ -292,5 +294,7 @@ private:
     bool start_change_state(Subprogram* cur_subprogram, AnyArgs& init_args, AnyArgs& start_args);
     bool process_calls_from_queue();
 };
+
+}
 
 #endif  // INCLUDE_SUBPROGRAM_LOCATOR_HPP_

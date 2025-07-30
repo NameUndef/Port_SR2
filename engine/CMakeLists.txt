@@ -1,7 +1,7 @@
 ﻿cmake_minimum_required(VERSION 3.20)
 
 add_library(${HEADERS_ENGINE_LIB_NAME} INTERFACE)
-target_include_directories(${HEADERS_ENGINE_LIB_NAME} INTERFACE "include")
+target_include_directories(${HEADERS_ENGINE_LIB_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 add_subdirectory("lib/common")
 add_subdirectory("lib/graph")
