@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <list>
 #include <queue>
+#include <memory>
 
 namespace core {
 
@@ -119,10 +120,14 @@ enum class SubprogramStates {
 };
 
 class SubprogramLocator {
+public:
+    using ParentsData = std::unordered_map<ID, std::any*>;
 
+private:
     struct Subprogram {
         std::any data_{}; // output data
-        std::unordered_map<ID, std::any*> parents_data_{};
+        std::any private_data_{};
+        ParentsData parents_data_{};
         SubprogramInfo info_{};
         SubprogramStates state_{SubprogramStates::NOT_EXISTED};
         int vertex_{0};
@@ -166,8 +171,63 @@ public:
         return set_default_args(subprogram_name, func_name, std::move(make_any_args(std::forward<ArgsT>(args)...)));
     }
 
-    std::unordered_map<ID, std::any*>* get_parents_data();
+    ParentsData* get_parents_data();
+
+    template<typename T>
+    T* get_parent_data(const ID& subprogram_name)
+    {
+        if (locator == nullptr) {
+            return nullptr;
+        }
+
+        auto it = get_parents_data()->find(subprogram_name);
+        if (it == get_parents_data()->end()) {
+            return nullptr;
+        }
+
+        return std::any_cast<T>(it->second);
+    }
+
+    template <typename T>
+    T* get_parent_data_from_sptr(const ID& subprogram_name)
+    {
+        return get_parent_data<std::shared_ptr<T>>(subprogram_name)->get();
+    }
+
+    template <typename BaseT, typename DerivedT>
+    BaseT* get_parent_data_from_sptr(const ID& subprogram_name)
+    {
+        return static_cast<BaseT>(get_parent_data<std::shared_ptr<DerivedT>>(subprogram_name)->get());
+    }
+
     std::any* get_data();
+
+    template <typename T>
+    T* get_data()
+    {
+        return std::any_cast<T>(get_data());
+    }
+
+    template <typename T>
+    T* get_data_from_sptr()
+    {
+        return std::any_cast<std::shared_ptr<T>>(get_data())->get();
+    }
+
+    std::any* get_private_data();
+
+    template <typename T>
+    T* get_private_data()
+    {
+        return std::any_cast<T>(get_private_data());
+    }
+
+        template <typename T>
+    T* get_private_data_from_sptr()
+    {
+        return std::any_cast<std::shared_ptr<T>>(get_private_data())->get();
+    }
+
 
     bool init(const ID& subprogram_name, AnyArgs& args);
     bool deinit(const ID& subprogram_name, AnyArgs& args);
@@ -294,6 +354,17 @@ private:
     bool start_change_state(Subprogram* cur_subprogram, AnyArgs& init_args, AnyArgs& start_args);
     bool process_calls_from_queue();
 };
+
+namespace subprograms {
+
+template<typename T>
+T* get_parent(SubprogramLocator* locator)
+{
+    static_assert(false, "Unsupported parent type. Check header file of subprogram");
+    return nullptr;
+}
+
+}
 
 }
 

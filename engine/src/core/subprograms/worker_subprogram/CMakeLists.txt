@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+
+add_library(${WORKER_SUBPROGRAM_LIB_NAME} STATIC "worker_subprogram.cpp")
+target_link_libraries(${WORKER_SUBPROGRAM_LIB_NAME} 
+    PRIVATE ${SUBPROGRAM_LOCATOR_LIB_NAME}
+    PRIVATE ${HEADERS_ENGINE_LIB_NAME}
+    PRIVATE ${THREAD_POOL_SUBPROGRAM_LIB_NAME})

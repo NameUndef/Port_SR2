@@ -382,7 +382,7 @@ bool SubprogramLocator::set_default_args(const ID &subprogram_name, SubprogramFu
     return true;
 }
 
-std::unordered_map<ID, std::any*>* SubprogramLocator::get_parents_data()
+SubprogramLocator::ParentsData* SubprogramLocator::get_parents_data()
 {
     if (!current_subprogram_) {
         return nullptr;
@@ -398,6 +398,15 @@ std::any* SubprogramLocator::get_data()
     }
 
     return &current_subprogram_->data_;
+}
+
+std::any* SubprogramLocator::get_private_data()
+{
+    if (!current_subprogram_) {
+        return nullptr;
+    }
+
+    return &current_subprogram_->private_data_;
 }
 
 void SubprogramLocator::get_dependency_order(

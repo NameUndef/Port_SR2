@@ -1,24 +1,23 @@
 #include "id.hpp"
 #include <cstring>
 
-bool operator==(const ID& lhs, const ID& rhs)
+bool operator==(const ID& lhs, const ID& rhs) noexcept
 {
-    return ((lhs.index() == 0 && rhs.index() == 0) && std::get<std::string>(lhs) == std::get<std::string>(rhs))
-        || ((lhs.index() == 1 && rhs.index() == 1) && std::get<int>(lhs) == std::get<int>(rhs));
-        
+    return ((lhs.index() == STRING_INDEX && rhs.index() == STRING_INDEX) && std::get<std::string>(lhs) == std::get<std::string>(rhs))
+        || ((lhs.index() == INT_INDEX && rhs.index() == INT_INDEX) && std::get<int>(lhs) == std::get<int>(rhs));
 }
 
-bool operator==(const ID& lhs, const char* rhs)
+bool operator==(const ID& lhs, const char* rhs) noexcept
 {
-    return lhs.index() == 0 && std::strcmp(std::get<std::string>(lhs).c_str(), rhs) == 0;
+    return lhs.index() == STRING_INDEX && std::strcmp(std::get<std::string>(lhs).c_str(), rhs) == 0;
 }
 
-bool operator==(const ID& lhs, const std::string& rhs)
+bool operator==(const ID& lhs, const std::string& rhs) noexcept
 {
-    return lhs.index() == 0 && std::get<std::string>(lhs) == rhs;
+    return lhs.index() == STRING_INDEX && std::get<std::string>(lhs) == rhs;
 }
 
-bool operator==(const ID& lhs, int rhs)
+bool operator==(const ID& lhs, int rhs) noexcept
 {
-    return lhs.index() == 1 && std::get<int>(lhs) == rhs;
+    return lhs.index() == INT_INDEX && std::get<int>(lhs) == rhs;
 }
