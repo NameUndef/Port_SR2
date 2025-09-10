@@ -18,6 +18,9 @@ struct ECSData {
 template <>
 ECSData* get_parent<ECSData>(SubprogramLocator* locator);
 
+template <>
+ECSData* get_parent<ECSData>(SubprogramLocator::ParentsData* parents_data);
+
 void install_ecs_world_subprogram(SubprogramLocator& locator);
 
 }

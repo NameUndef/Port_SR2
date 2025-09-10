@@ -60,8 +60,10 @@ void core::subprograms::install_sdl_subprogram(SubprogramLocator& locator)
     window_config.window_h = 600;
 
     info.set_name(SDL_SUBPROGRAM_NAME);
+    
     info.set_func(SubprogramFuncNames::INIT, init_func, window_config);
     info.set_func(SubprogramFuncNames::DEINIT, deinit_func);
+
     locator.add(info);
 }
 
@@ -69,4 +71,10 @@ template <>
 SDLData* core::subprograms::get_parent<SDLData>(SubprogramLocator* locator)
 {
     return locator->get_parent_data<SDLData>(SDL_SUBPROGRAM_NAME);
+}
+
+template <>
+SDLData* core::subprograms::get_parent<SDLData>(SubprogramLocator::ParentsData* parents_data)
+{
+    return SubprogramLocator::get_parent_data<SDLData>(parents_data, SDL_SUBPROGRAM_NAME);
 }

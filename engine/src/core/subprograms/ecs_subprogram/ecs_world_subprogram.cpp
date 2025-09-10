@@ -34,3 +34,9 @@ ECSData* core::subprograms::get_parent<ECSData>(SubprogramLocator* locator)
 {
     return locator->get_parent_data_from_sptr<ECSData>(ECS_WORLD_SUBPROGRAM_NAME);
 }
+
+template <>
+ECSData* core::subprograms::get_parent<ECSData>(SubprogramLocator::ParentsData* parents_data)
+{
+    return SubprogramLocator::get_parent_data_from_sptr<ECSData>(parents_data, ECS_WORLD_SUBPROGRAM_NAME);
+}

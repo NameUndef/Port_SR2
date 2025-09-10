@@ -72,8 +72,15 @@ void core::subprograms::install_game_loop_subprogram(SubprogramLocator &locator)
     locator.add(subprogram);
 }
 
+
 template <>
 GameLoopData* core::subprograms::get_parent<GameLoopData>(SubprogramLocator* locator)
 {
     return locator->get_parent_data<GameLoopData>(GAME_LOOP_SUBPROGRAM_NAME);
+}
+
+template <>
+GameLoopData* core::subprograms::get_parent<GameLoopData>(SubprogramLocator::ParentsData* parents_data)
+{
+    return SubprogramLocator::get_parent_data<GameLoopData>(parents_data, GAME_LOOP_SUBPROGRAM_NAME);
 }

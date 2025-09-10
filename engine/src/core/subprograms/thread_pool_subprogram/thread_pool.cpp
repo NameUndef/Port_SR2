@@ -44,6 +44,22 @@ std::size_t ThreadPool::get_named_threads_number() const
     return named_thread_units_.size();
 }
 
+bool ThreadPool::have_named_thread(const ID &thread_id) const
+{
+    decltype(named_thread_units_)::const_iterator thread_unit;
+
+    {
+        std::lock_guard<std::mutex> lock(named_mutex_);
+
+        thread_unit = named_thread_units_.find(thread_id);
+        if (thread_unit == named_thread_units_.end()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool ThreadPool::named_thread_unit_is_busy(const ID& thread_id) const
 {
     decltype(named_thread_units_)::const_iterator thread_unit;

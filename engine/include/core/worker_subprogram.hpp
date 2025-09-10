@@ -1,1 +1,1 @@
-../../src/core/subprograms/worker/worker_subprogram.hpp
+../../src/core/subprograms/worker_subprogram/worker_subprogram.hpp

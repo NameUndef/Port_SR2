@@ -7,7 +7,7 @@ namespace core::subprograms {
     
     using Process = std::function<void(std::any*, SubprogramLocator::ParentsData*)>;
 
-    void install_worker(SubprogramInfo& info, const Process& process);
+    void install_worker(SubprogramInfo& info, const Process& process, const ID& thread_id);
 }
 
 #endif  // INCLUDE_WORKER_SUBPROGRAM_HPP_

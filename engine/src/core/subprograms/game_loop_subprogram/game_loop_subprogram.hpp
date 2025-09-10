@@ -14,9 +14,13 @@ namespace core::subprograms {
         SDLData* window_data;
     };
 
+    
     template <>
     GameLoopData* get_parent<GameLoopData>(SubprogramLocator* locator);
-
+    
+    template <>
+    GameLoopData* get_parent<GameLoopData>(SubprogramLocator::ParentsData* parents_data);
+    
     void game_loop(GameLoopData* data, SubprogramLocator* locator);
     void install_game_loop_subprogram(SubprogramLocator& locator);
 }

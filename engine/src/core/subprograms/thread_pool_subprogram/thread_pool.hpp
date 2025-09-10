@@ -63,6 +63,7 @@ private:
 
 public:
     std::size_t get_named_threads_number() const;
+    bool have_named_thread(const ID& thread_id) const;
     bool named_thread_unit_is_busy(const ID& thread_id) const;
     bool add_named_thread_unit(const ID& thread_id);
     bool try_run_activity(const ID& thread_id, const Activity& activity);

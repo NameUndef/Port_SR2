@@ -26,6 +26,9 @@ struct SDLData {
     template <>
     SDLData* get_parent<SDLData>(SubprogramLocator* locator);
 
+    template <>
+    SDLData* get_parent<SDLData>(SubprogramLocator::ParentsData* parents_data);
+
 void install_sdl_subprogram(SubprogramLocator& locator);
 
 }

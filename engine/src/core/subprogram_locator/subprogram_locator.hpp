@@ -200,6 +200,33 @@ public:
         return static_cast<BaseT>(get_parent_data<std::shared_ptr<DerivedT>>(subprogram_name)->get());
     }
 
+    template<typename T>
+    static T* get_parent_data(ParentsData* parents_data, const ID& subprogram_name)
+    {
+        if (locator == nullptr) {
+            return nullptr;
+        }
+
+        auto it = parents_data->find(subprogram_name);
+        if (it == parents_data->end()) {
+            return nullptr;
+        }
+
+        return std::any_cast<T>(it->second);
+    }
+
+    template <typename T>
+    static T* get_parent_data_from_sptr(ParentsData* parents_data, const ID& subprogram_name)
+    {
+        return get_parent_data<std::shared_ptr<T>>(parents_data, subprogram_name)->get();
+    }
+
+    template <typename BaseT, typename DerivedT>
+    static BaseT* get_parent_data_from_sptr(ParentsData* parents_data, const ID& subprogram_name)
+    {
+        return static_cast<BaseT>(get_parent_data<std::shared_ptr<DerivedT>>(parents_data, subprogram_name)->get());
+    }
+
     std::any* get_data();
 
     template <typename T>
@@ -212,6 +239,18 @@ public:
     T* get_data_from_sptr()
     {
         return std::any_cast<std::shared_ptr<T>>(get_data())->get();
+    }
+
+    template <typename T>
+    static T* get_data(std::any* any_ptr)
+    {
+        return std::any_cast<T>(any_ptr);
+    }
+
+    template <typename T>
+    static T* get_data_from_sptr(std::any* any_ptr)
+    {
+        return std::any_cast<std::shared_ptr<T>>(any_ptr)->get();
     }
 
     std::any* get_private_data();
@@ -227,7 +266,6 @@ public:
     {
         return std::any_cast<std::shared_ptr<T>>(get_private_data())->get();
     }
-
 
     bool init(const ID& subprogram_name, AnyArgs& args);
     bool deinit(const ID& subprogram_name, AnyArgs& args);
@@ -359,6 +397,13 @@ namespace subprograms {
 
 template<typename T>
 T* get_parent(SubprogramLocator* locator)
+{
+    static_assert(false, "Unsupported parent type. Check header file of subprogram");
+    return nullptr;
+}
+
+template<typename T>
+T* get_parent(SubprogramLocator::ParentsData* parents_data)
 {
     static_assert(false, "Unsupported parent type. Check header file of subprogram");
     return nullptr;

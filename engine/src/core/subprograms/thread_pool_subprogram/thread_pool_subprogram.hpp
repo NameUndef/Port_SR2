@@ -9,6 +9,9 @@ namespace core::subprograms {
 
     template <>
     ThreadPool* get_parent<ThreadPool>(SubprogramLocator* locator);
+
+    template<>
+    ThreadPool* get_parent(SubprogramLocator::ParentsData* parents_data);
     
     void install_thread_pool_subprogram(SubprogramLocator& subprogram_locator);
 }
