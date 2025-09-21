@@ -8,10 +8,12 @@ using namespace core;
 SCENARIO("Subprogram_Locator", "[core][locator]") {
     GIVEN("Subprogram Locator") {
         SubprogramLocator subprogram_locator;
+        std::cout << "A" << std::endl;
         WHEN("Add subprogram") {
             SubprogramInfo subprogram_template;
             subprogram_template.set_name("A");
             subprogram_locator.add(subprogram_template);
+            std::cout << "B" << std::endl;
             THEN("Subprogram was added") {
                 REQUIRE(subprogram_locator.get_subprogram_state("A") == SubprogramStates::READY_TO_INITIALIZE);
             }

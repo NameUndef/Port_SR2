@@ -146,7 +146,7 @@ bool ThreadPool::add_common_threads(std::size_t count)
         CommonThreadUnit* unit_ptr = nullptr;
         {
             std::lock_guard<std::mutex> lock(common_mutex_);
-            CommonThreadUnit* unit_ptr = &common_threads_.common_thread_units.emplace_back();
+            unit_ptr = &common_threads_.common_thread_units.emplace_back();
         }
 
         CommonThreadUnit& unit = *unit_ptr;

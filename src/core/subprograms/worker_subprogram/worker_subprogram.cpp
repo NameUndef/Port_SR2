@@ -8,6 +8,8 @@
 #include "core/thread_pool_subprogram.hpp"
 #include "id.hpp"
 
+//#include <iostream>
+
 using namespace core;
 using namespace core::subprograms;
 
@@ -37,7 +39,7 @@ static bool init(const Process& process, const ID& thread_id, SubprogramLocator*
 
     ThreadPool* thread_pool = get_parent<ThreadPool>(locator);
 
-    if (thread_pool->have_named_thread(thread_id)) {
+    if (!thread_pool->have_named_thread(data.thread_id)) {
         if (!thread_pool->add_named_thread_unit(data.thread_id)) {
             return false;
         }
@@ -74,23 +76,27 @@ static bool start(bool start_as_paused, SubprogramLocator* locator)
         while ((state = data.state.load(std::memory_order_acquire)) != States::STOP) {
             
             if (state == States::WORK) {
+                //std::cout << "Worker in work" << std::endl;
                 do {
                     data.process(locator->get_data(), parents_data);
                 } while ((state = data.state.load(std::memory_order_relaxed)) == States::WORK);
             }
 
             if (state == States::PAUSING) {
+                //std::cout << "Worker in pausing" << std::endl;
                 data.state.store(States::PAUSE, std::memory_order_release);
                 data.cv.notify_one();
                 state = States::PAUSE;
 
             } else if (state == States::STOPING) {
+                //std::cout << "Worker in stoping" << std::endl;
                 data.state.store(States::STOP, std::memory_order_release);
                 data.cv.notify_one();
                 state = States::STOP;
             }
             
             if (state == States::PAUSE) {
+                //std::cout << "Worker in pause" << std::endl;
                 std::unique_lock<std::mutex> lock(data.mutex);
                 data.cv.wait(lock, [&data] { 
                         return data.state.load(std::memory_order_relaxed) != States::PAUSE; 
@@ -113,13 +119,17 @@ static bool stop(SubprogramLocator* locator)
     States state = data.state.load(std::memory_order_relaxed);
 
     if (state == States::WORK) {
+        //std::cout << "MT send STOPING" << std::endl;
         data.state.store(States::STOPING, std::memory_order_relaxed);
         std::unique_lock<std::mutex> lock(data.mutex);
         data.cv.wait(lock, [&data] { return data.state.load(std::memory_order_acquire) == States::STOP; });
+        //std::cout << "MT done STOP" << std::endl;
 
     } else if (state == States::PAUSE) {
+        //std::cout << "MT send STOPING, when worker pause" << std::endl;
         data.state.store(States::STOP, std::memory_order_relaxed);
         data.cv.notify_one();
+        //std::cout << "MT done STOP" << std::endl;
     }
 
     return true;
@@ -129,18 +139,22 @@ static bool pause(SubprogramLocator* locator)
 {
     WorkerPrivateData& data = *locator->get_private_data_from_sptr<WorkerPrivateData>();
 
+    //std::cout << "MT out CS" << std::endl;
     data.state.store(States::PAUSING, std::memory_order_relaxed);
     std::unique_lock<std::mutex> lock(data.mutex);
+    //std::cout << "MT in CS" << std::endl;
     data.cv.wait(lock, [&data]{ return data.state.load(std::memory_order_acquire) == States::PAUSE; });
-
+    //std::cout << "MT done pause" << std::endl;
     return true;
 }
 
 static bool resume(SubprogramLocator* locator)
 {
+    //std::cout << "MT set resume" << std::endl;
     WorkerPrivateData& data = *locator->get_private_data_from_sptr<WorkerPrivateData>();
     data.state.store(States::WORK, std::memory_order_release);
     data.cv.notify_one();
+    //std::cout << "MT done resume" << std::endl;
     return true;
 }
 
@@ -148,7 +162,8 @@ void core::subprograms::install_worker(SubprogramInfo &info, const Process &proc
 {
     AnyArgsFunction<bool> start_func = &start;
     AnyArgsFunction<bool> init_func = &init;
-    info.set_func(SubprogramFuncNames::INIT, init_func, process, thread_id);
+
+    info.set_func(SubprogramFuncNames::INIT, init_func, process, ID(thread_id));
     info.set_func(SubprogramFuncNames::DEINIT, make_any_args_func<SubprogramLocator*>(deinit));
     info.set_func(SubprogramFuncNames::START, start_func, false);
     info.set_func(SubprogramFuncNames::START_AS_PAUSED, start_func, true);

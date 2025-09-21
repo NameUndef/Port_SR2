@@ -2,23 +2,23 @@
 #include "core/subprogram_locator.hpp"
 #include "core/sdl_subprogram.hpp"
 #include "core/ecs_world_subprogram.hpp"
+#include "core/thread_pool_subprogram.hpp"
+#include "core/ecs_worker_subprogram.hpp"
 #include <iostream>
 #include <list>
 #include <functional>
 
-
-
-int main(int argc, char* argv[])
+int run_engine(int argc, char* argv[])
 {
     using namespace core;
     using namespace core::subprograms;
 
     SubprogramLocator locator;
-    install_sdl_subprogram(locator);
-    install_ecs_world_subprogram(locator);
-    std::cout << "Start" << std::endl;
-    locator.init("SDL");
 
-    locator.remove("SDL");
+    install_sdl_subprogram(locator);
+
+    locator.start(SDL_SUBPROGRAM_NAME);
+
+    locator.stop(SDL_SUBPROGRAM_NAME);
     return 0;
 }

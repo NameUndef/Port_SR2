@@ -7,11 +7,11 @@ project ("PSR2")
 
 ## SDL2
 
-find_package(SDL2 REQUIRED)
-find_package(SDL2_image REQUIRED)
-find_package(SDL2_mixer REQUIRED)
-find_package(SDL2_net REQUIRED)
-find_package(SDL2_ttf REQUIRED)    
+find_package(SDL2 REQUIRED CONFIG)
+find_package(SDL2_image REQUIRED CONFIG)
+find_package(SDL2_mixer REQUIRED CONFIG)
+find_package(SDL2_net REQUIRED CONFIG)
+find_package(SDL2_ttf REQUIRED CONFIG)    
 
 if(NOT SDL2_FOUND)
     message("Error: SDL2 not found")
@@ -85,7 +85,7 @@ include_directories(${Catch2_INCLUDE_DIRS})
 
 set(HEADERS_ENGINE_LIB_NAME "headers_engine")
 
-set(ENGINE_LIB_NAME "engine")
+set(ENGINE_BUNDLE_LIB_NAME "engine_bundle")
     set(COMMON_LIB_NAME "common")
         set(COMMON_DUMMY_LIB_NAME "dummy")
     set(GRAPH_LIB_NAME "graph")
@@ -99,17 +99,66 @@ set(ENGINE_LIB_NAME "engine")
     set(BASE_GAME_LIB_NAME "base_game")
         set(TURN_BASED_RPG_LIB_NAME "turn_based_rpg")
 
-
-set(TEST_ENGINE_LIB_NAME "test_engine")    
+set(TEST_ENGINE_BUNDLE_LIB_NAME "test_engine_bundle")    
     set(TEST_INNER_LIB_NAME "test_inner")
     set(TEST_CORE_LIB_NAME "test_core")
 
-set(TEST_APP_NAME "run_test_engine")
+set(ENGINE_LIB_NAME "engine")
+set(TEST_ENGINE_LIB_NAME "test_engine")
 
 set(LAUNCHER_APP_NAME "launcher")
+set(TEST_APP_NAME "run_test_engine")
 
-## ---------- SUBDIRS ---------- ##
+## ---------- MAIN BIN TARGETS ---------- ##
 
-add_subdirectory("engine")
-add_subdirectory("apps/test_app")
-add_subdirectory("apps/launcher")
+# Engine 
+
+add_library(${HEADERS_ENGINE_LIB_NAME} INTERFACE)
+target_include_directories(${HEADERS_ENGINE_LIB_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+add_subdirectory("lib/common")
+add_subdirectory("lib/graph")
+add_subdirectory("src/core")
+add_subdirectory("src/base_game")
+add_subdirectory("test")
+
+add_library(${ENGINE_BUNDLE_LIB_NAME} INTERFACE)
+target_link_libraries(${ENGINE_BUNDLE_LIB_NAME}
+    INTERFACE ${COMMON_LIB_NAME}
+    INTERFACE ${GRAPH_LIB_NAME} 
+    INTERFACE ${CORE_LIB_NAME}
+    INTERFACE ${BASE_GAME_LIB_NAME}
+    INTERFACE ${HEADERS_ENGINE_LIB_NAME})
+
+add_library(${ENGINE_LIB_NAME} SHARED "src/runners/engine/engine.cpp")
+target_link_libraries(${ENGINE_LIB_NAME}
+    PRIVATE ${ENGINE_BUNDLE_LIB_NAME})
+target_include_directories(${ENGINE_LIB_NAME} PUBLIC "src/runners/engine")
+
+add_library(${TEST_ENGINE_LIB_NAME} SHARED 
+    "src/runners/test_engine/test_engine.cpp")
+target_link_libraries(${TEST_ENGINE_LIB_NAME}
+    PRIVATE ${ENGINE_BUNDLE_LIB_NAME}
+    PRIVATE ${TEST_ENGINE_BUNDLE_LIB_NAME}
+    PRIVATE Catch2::Catch2)
+target_include_directories(${TEST_ENGINE_LIB_NAME} PUBLIC "src/runners/test_engine")
+
+install(TARGETS ${ENGINE_LIB_NAME} ${TEST_ENGINE_LIB_NAME})
+
+# Launcher
+
+add_executable(${LAUNCHER_APP_NAME} "src/apps/launcher/main.cpp")
+target_link_libraries(${LAUNCHER_APP_NAME} 
+    PRIVATE ${ENGINE_LIB_NAME})
+install(TARGETS ${LAUNCHER_APP_NAME})
+
+# Test app
+
+add_executable(${TEST_APP_NAME} "src/apps/test_app/main.cpp")
+target_link_libraries(${TEST_APP_NAME} 
+    PRIVATE ${TEST_ENGINE_LIB_NAME})
+install(TARGETS ${TEST_APP_NAME})
+
+include(CTest)
+include(Catch)
+catch_discover_tests(${TEST_APP_NAME})

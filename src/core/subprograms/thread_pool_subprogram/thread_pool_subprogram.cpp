@@ -15,11 +15,11 @@ static bool init(SubprogramLocator* locator)
     return true; 
 }
 
-static bool deinit(SubprogramLocator* locator) 
+static bool deinit(bool check_threads_working, SubprogramLocator* locator) 
 {
     ThreadPoolInner* data = locator->get_data_from_sptr<ThreadPoolInner>();
     
-    if (!data->all_threads_can_stop()) {
+    if (check_threads_working && !data->all_threads_can_stop()) {
         return false;
     } 
 
@@ -33,7 +33,7 @@ void core::subprograms::install_thread_pool_subprogram(SubprogramLocator& subpro
     info.set_name(THREAD_POOL_SUBPROGRAM_NAME);
 
     info.set_func(SubprogramFuncNames::INIT, make_any_args_func<SubprogramLocator*>(init));
-    info.set_func(SubprogramFuncNames::DEINIT, make_any_args_func<SubprogramLocator*>(deinit));
+    info.set_func(SubprogramFuncNames::DEINIT, make_any_args_func<bool, SubprogramLocator*>(deinit), false);
 
     subprogram_locator.add(info);
 }

@@ -7,4 +7,5 @@ target_link_libraries(${ECS_SUBPROGRAM_LIB_NAME}
     PRIVATE ${SUBPROGRAM_LOCATOR_LIB_NAME}
     PRIVATE ${HEADERS_ENGINE_LIB_NAME}
     PRIVATE ${WORKER_SUBPROGRAM_LIB_NAME}
-    PUBLIC flecs::flecs)
+    PUBLIC flecs::flecs_static)
+

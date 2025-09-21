@@ -176,10 +176,6 @@ public:
     template<typename T>
     T* get_parent_data(const ID& subprogram_name)
     {
-        if (locator == nullptr) {
-            return nullptr;
-        }
-
         auto it = get_parents_data()->find(subprogram_name);
         if (it == get_parents_data()->end()) {
             return nullptr;
@@ -197,13 +193,13 @@ public:
     template <typename BaseT, typename DerivedT>
     BaseT* get_parent_data_from_sptr(const ID& subprogram_name)
     {
-        return static_cast<BaseT>(get_parent_data<std::shared_ptr<DerivedT>>(subprogram_name)->get());
+        return static_cast<BaseT*>(get_parent_data<std::shared_ptr<DerivedT>>(subprogram_name)->get());
     }
 
     template<typename T>
     static T* get_parent_data(ParentsData* parents_data, const ID& subprogram_name)
     {
-        if (locator == nullptr) {
+        if (parents_data == nullptr) {
             return nullptr;
         }
 
@@ -224,7 +220,7 @@ public:
     template <typename BaseT, typename DerivedT>
     static BaseT* get_parent_data_from_sptr(ParentsData* parents_data, const ID& subprogram_name)
     {
-        return static_cast<BaseT>(get_parent_data<std::shared_ptr<DerivedT>>(parents_data, subprogram_name)->get());
+        return static_cast<BaseT*>(get_parent_data<std::shared_ptr<DerivedT>>(parents_data, subprogram_name)->get());
     }
 
     std::any* get_data();
@@ -278,43 +274,50 @@ public:
     template <typename... ArgsT>
     inline bool init(const ID& subprogram_name, ArgsT&&... args)
     {
-        return init(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
+        AnyArgs any_args = make_any_args(std::forward<ArgsT>(args)...);
+        return init(subprogram_name, any_args);
     }
 
     template <typename... ArgsT>
     inline bool deinit(const ID& subprogram_name, ArgsT&&... args)
     {
-        return deinit(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
+        AnyArgs any_args = make_any_args(std::forward<ArgsT>(args)...);
+        return deinit(subprogram_name, any_args);
     }
 
     template <typename... ArgsT>
     inline bool start(const ID& subprogram_name, ArgsT&&... args)
     {
-        return start(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
+        AnyArgs any_args = make_any_args(std::forward<ArgsT>(args)...);
+        return start(subprogram_name, any_args);
     }
 
     template <typename... ArgsT>
     inline bool start_as_paused(const ID& subprogram_name, ArgsT&&... args)
     {
-        return start_as_paused(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
+        AnyArgs any_args = make_any_args(std::forward<ArgsT>(args)...);
+        return start_as_paused(subprogram_name, any_args);
     }
 
     template <typename... ArgsT>
     inline bool stop(const ID& subprogram_name, ArgsT&&... args)
     {
-        return stop(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
+        AnyArgs any_args = make_any_args(std::forward<ArgsT>(args)...);
+        return stop(subprogram_name, any_args);
     }
 
     template <typename... ArgsT>
     inline bool resume(const ID& subprogram_name, ArgsT&&... args)
     {
-        return resume(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
+        AnyArgs any_args = make_any_args(std::forward<ArgsT>(args)...);
+        return resume(subprogram_name, any_args);
     }
 
     template <typename... ArgsT>
     inline bool pause(const ID& subprogram_name, ArgsT&&... args)
     {
-        return pause(subprogram_name, make_any_args(std::forward<ArgsT>(args)...));
+        AnyArgs any_args = make_any_args(std::forward<ArgsT>(args)...);
+        return pause(subprogram_name, any_args);
     }
 
     bool init(const ID& subprogram_name)
@@ -396,18 +399,10 @@ private:
 namespace subprograms {
 
 template<typename T>
-T* get_parent(SubprogramLocator* locator)
-{
-    static_assert(false, "Unsupported parent type. Check header file of subprogram");
-    return nullptr;
-}
+T* get_parent(SubprogramLocator* locator) = delete;
 
 template<typename T>
-T* get_parent(SubprogramLocator::ParentsData* parents_data)
-{
-    static_assert(false, "Unsupported parent type. Check header file of subprogram");
-    return nullptr;
-}
+T* get_parent(SubprogramLocator::ParentsData* parents_data) = delete;
 
 }
 
