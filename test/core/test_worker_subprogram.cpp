@@ -2,6 +2,7 @@
 #include "core/subprogram_locator.hpp"
 #include "core/thread_pool_subprogram.hpp"
 #include "core/worker_subprogram.hpp"
+//#include <iostream>
 
 using namespace core;
 using namespace core::subprograms;
@@ -122,32 +123,50 @@ SCENARIO("Worker Subprogram", "[core][subprogram][worker][multithreading]") {
                 locator.add(info_user3);
 
                 AND_WHEN("Start user1, user3") {
+                    //std::cout << "Start user1, user3: begin" << std::endl;
+                    //std::cout << "start" << std::endl;
                     REQUIRE(locator.start("user1_worker"));
+                    //std::cout << "start" << std::endl;
                     REQUIRE(locator.start("user3_worker"));
+                    //std::cout << "Start user1, user3: end" << std::endl;
 
                     THEN("Result is 1") {
 
                         int status = 0;
+                        //std::cout << "Result is 1: Waiting for result" << std::endl;
                         while ((status = status_result.load(std::memory_order_relaxed)) == 0);
+                        //std::cout << "Result is 1: Waiting end" << std::endl;
 
                         REQUIRE(status == 1);
 
                         AND_WHEN("Switch to user2") {
+                            //std::cout << "Switch to user2: begin" << std::endl;
+                            //std::cout << "pause" << std::endl;
                             REQUIRE(locator.pause("user1_worker"));
+                            //std::cout << "start" << std::endl;
                             REQUIRE(locator.start("user2_worker"));
+                            //std::cout << "Switch to user2: end" << std::endl;
 
+                            //std::cout << "Switch to user2: Waiting for result" << std::endl;
                             while ((status = status_result.load(std::memory_order_relaxed)) == 1);
+                            //std::cout << "Switch to user2: Waiting end" << std::endl;
                             REQUIRE(status == 2);
 
                             AND_WHEN("Switch to user1") {
-
+                                //std::cout << "Switch to user1: begin" << std::endl;
+                                //std::cout << "pause" << std::endl;
                                 REQUIRE(locator.pause("user2_worker"));
+                                //std::cout << "start" << std::endl;
                                 REQUIRE(locator.resume("user1_worker"));
-
+                                //std::cout << "Switch to user1: begin" << std::endl;
+                                //std::cout << "Switch to user1: Waiting for result" << std::endl;
                                 while ((status = status_result.load(std::memory_order_relaxed)) == 2);
+                                //std::cout << "Switch to user1: Waiting end" << std::endl;
                                 REQUIRE(status == 1);
 
+                                //std::cout << "deinit begin" << std::endl;
                                 REQUIRE(locator.deinit(THREAD_POOL_SUBPROGRAM_NAME));
+                                //std::cout << "deinit end" << std::endl;
                             }
                         }
                     }

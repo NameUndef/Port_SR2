@@ -14,7 +14,7 @@
 
 namespace core {
 
-enum class SubprogramFuncNames {
+enum class SubprogramFuncNames : std::size_t {
     INIT,
     DEINIT,
     START,
@@ -272,7 +272,8 @@ public:
     bool pause(const ID& subprogram_name, AnyArgs& args);
 
     template <typename... ArgsT>
-    inline bool init(const ID& subprogram_name, ArgsT&&... args)
+    inline bool init(const ID& subprogram_name, 
+        ArgsT&&... args)
     {
         AnyArgs any_args = make_any_args(std::forward<ArgsT>(args)...);
         return init(subprogram_name, any_args);

@@ -8,7 +8,7 @@
 #include "core/thread_pool_subprogram.hpp"
 #include "id.hpp"
 
-//#include <iostream>
+// #include <iostream>
 
 using namespace core;
 using namespace core::subprograms;
@@ -79,20 +79,29 @@ static bool start(bool start_as_paused, SubprogramLocator* locator)
                 //std::cout << "Worker in work" << std::endl;
                 do {
                     data.process(locator->get_data(), parents_data);
-                } while ((state = data.state.load(std::memory_order_relaxed)) == States::WORK);
+                } while ((state = data.state.load(std::memory_order_acquire)) == States::WORK);
             }
 
             if (state == States::PAUSING) {
-                //std::cout << "Worker in pausing" << std::endl;
-                data.state.store(States::PAUSE, std::memory_order_release);
-                data.cv.notify_one();
+                //std::cout << "state = PAUSE" << std::endl;
+                data.state.store(States::PAUSE, std::memory_order_relaxed);
+                //std::cout << "notify" << std::endl;
+                {
+                    std::unique_lock<std::mutex> lock(data.mutex);
+                    data.cv.notify_one();
+                }
                 state = States::PAUSE;
+                //std::cout << "Worker: pausing end" << std::endl;
 
             } else if (state == States::STOPING) {
                 //std::cout << "Worker in stoping" << std::endl;
                 data.state.store(States::STOP, std::memory_order_release);
-                data.cv.notify_one();
+                {
+                    std::unique_lock<std::mutex> lock(data.mutex);
+                    data.cv.notify_one();
+                }
                 state = States::STOP;
+                //std::cout << "Worker: stoping end" << std::endl;
             }
             
             if (state == States::PAUSE) {
@@ -101,9 +110,10 @@ static bool start(bool start_as_paused, SubprogramLocator* locator)
                 data.cv.wait(lock, [&data] { 
                         return data.state.load(std::memory_order_relaxed) != States::PAUSE; 
                     });
+                //std::cout << "Worker: Pause end" << std::endl;
             }
         }
-
+        //std::cout << "Worker: stop" << std::endl;
     };
 
     if (!thread_pool->try_run_activity(data.thread_id, activity)) {
@@ -115,46 +125,56 @@ static bool start(bool start_as_paused, SubprogramLocator* locator)
 
 static bool stop(SubprogramLocator* locator)
 {
+    //std::cout << "MT Stop() begin" << std::endl;
     WorkerPrivateData& data = *locator->get_private_data_from_sptr<WorkerPrivateData>();
-    States state = data.state.load(std::memory_order_relaxed);
+    States state = data.state.load(std::memory_order_acquire);
 
     if (state == States::WORK) {
         //std::cout << "MT send STOPING" << std::endl;
-        data.state.store(States::STOPING, std::memory_order_relaxed);
+        data.state.store(States::STOPING, std::memory_order_release);
         std::unique_lock<std::mutex> lock(data.mutex);
-        data.cv.wait(lock, [&data] { return data.state.load(std::memory_order_acquire) == States::STOP; });
+        data.cv.wait(lock, [&data] { return data.state.load(std::memory_order_relaxed) == States::STOP; });
         //std::cout << "MT done STOP" << std::endl;
 
     } else if (state == States::PAUSE) {
         //std::cout << "MT send STOPING, when worker pause" << std::endl;
         data.state.store(States::STOP, std::memory_order_relaxed);
-        data.cv.notify_one();
+        {
+            std::unique_lock<std::mutex> lock(data.mutex);
+            data.cv.notify_one();
+        }
         //std::cout << "MT done STOP" << std::endl;
     }
-
+    //std::cout << "MT Stop() end" << std::endl;
     return true;
 }
 
 static bool pause(SubprogramLocator* locator)
 {
+    //std::cout << "MT Pause() begin" << std::endl;
     WorkerPrivateData& data = *locator->get_private_data_from_sptr<WorkerPrivateData>();
 
     //std::cout << "MT out CS" << std::endl;
-    data.state.store(States::PAUSING, std::memory_order_relaxed);
+    data.state.store(States::PAUSING, std::memory_order_release);
     std::unique_lock<std::mutex> lock(data.mutex);
     //std::cout << "MT in CS" << std::endl;
-    data.cv.wait(lock, [&data]{ return data.state.load(std::memory_order_acquire) == States::PAUSE; });
+    data.cv.wait(lock, [&data] {
+        return data.state.load(std::memory_order_relaxed) == States::PAUSE; });
     //std::cout << "MT done pause" << std::endl;
+    //std::cout << "MT Pause() end" << std::endl;
     return true;
 }
 
 static bool resume(SubprogramLocator* locator)
 {
-    //std::cout << "MT set resume" << std::endl;
+    //std::cout << "Resume begin" << std::endl;
     WorkerPrivateData& data = *locator->get_private_data_from_sptr<WorkerPrivateData>();
-    data.state.store(States::WORK, std::memory_order_release);
-    data.cv.notify_one();
-    //std::cout << "MT done resume" << std::endl;
+    data.state.store(States::WORK, std::memory_order_relaxed);
+    {
+        std::unique_lock<std::mutex> lock(data.mutex);
+        data.cv.notify_one();
+    }
+    //std::cout << "Resume end" << std::endl;
     return true;
 }
 

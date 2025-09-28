@@ -1,5 +1,6 @@
 #include "thread_pool_subprogram.hpp"
 #include "thread_pool.hpp"
+//#include <iostream>
 
 using namespace core;
 
@@ -17,6 +18,7 @@ static bool init(SubprogramLocator* locator)
 
 static bool deinit(bool check_threads_working, SubprogramLocator* locator) 
 {
+    //std::cout << "TP deinit() begin" << std::endl;
     ThreadPoolInner* data = locator->get_data_from_sptr<ThreadPoolInner>();
     
     if (check_threads_working && !data->all_threads_can_stop()) {
@@ -24,6 +26,7 @@ static bool deinit(bool check_threads_working, SubprogramLocator* locator)
     } 
 
     locator->get_data()->reset();
+    //std::cout << "TP deinit() end" << std::endl;
     return true;
 }
 

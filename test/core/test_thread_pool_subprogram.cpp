@@ -2,7 +2,7 @@
 #include "core/subprogram_locator.hpp"
 #include "core/thread_pool_subprogram.hpp"
 #include "any_args_func.hpp"
-#include <iostream>
+//#include <iostream>
 #include <atomic>
 
 using namespace core;
@@ -50,7 +50,7 @@ SCENARIO("Thread Pool Subprogram", "[core][subprogram][thread_pool][multithreadi
 
                     while (!user1_activity_done.load(std::memory_order_relaxed));
 
-                    REQUIRE(locator.deinit(THREAD_POOL_SUBPROGRAM_NAME, true));
+                    REQUIRE(locator.deinit(THREAD_POOL_SUBPROGRAM_NAME));
                 }
             }
         }

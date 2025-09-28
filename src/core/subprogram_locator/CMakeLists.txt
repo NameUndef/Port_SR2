@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
 add_library(${SUBPROGRAM_LOCATOR_LIB_NAME} STATIC 
-    "subprogram_locator.cpp")
+    "subprogram_locator.cpp"
+    "multithread_subprogram_locator.cpp"
+    "multithread_subprogram_locator_inner.cpp")
 
 target_link_libraries(${SUBPROGRAM_LOCATOR_LIB_NAME} 
     PRIVATE ${COMMON_LIB_NAME}

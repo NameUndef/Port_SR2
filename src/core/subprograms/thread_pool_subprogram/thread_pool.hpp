@@ -21,8 +21,7 @@ private:
 
     enum class States {
         IDLE,
-        BUSY,
-        STOP
+        BUSY
     };
 
     enum class CommonStates {
@@ -36,6 +35,7 @@ private:
         Activity activity;
         ID id;
         std::atomic<States> state;
+        std::atomic<bool> stop_command;
         std::mutex mutex;
         std::condition_variable cv;
     };

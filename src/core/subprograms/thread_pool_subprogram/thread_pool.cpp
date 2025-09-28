@@ -1,4 +1,5 @@
 #include "thread_pool.hpp"
+//#include <iostream>
 
 ThreadPool::~ThreadPool()
 {
@@ -22,21 +23,29 @@ bool ThreadPool::all_threads_can_stop()
 
 void ThreadPool::stop_all_threads()
 {
+    //std::cout << "TP stop_all_threads() begin" << std::endl;
     for (auto& thread_unit : named_thread_units_) {
-        thread_unit.second.state.store(States::STOP, std::memory_order_acquire);
-        thread_unit.second.cv.notify_one();
+        thread_unit.second.stop_command.store(true, std::memory_order_relaxed);
+        {
+            std::unique_lock<std::mutex> lock(thread_unit.second.mutex);
+            thread_unit.second.cv.notify_one();
+        }
     }
 
     for (auto& thread_unit : named_thread_units_) {
         thread_unit.second.thread.join();
     }
 
-    common_threads_.state.store(CommonStates::STOP, std::memory_order_release);
-    common_threads_.common_cv.notify_all();
+    common_threads_.state.store(CommonStates::STOP, std::memory_order_relaxed);
+    {
+        std::unique_lock<std::mutex> lock(common_mutex_);
+        common_threads_.common_cv.notify_all();
+    }
 
     for (auto& thread_unit : common_threads_.common_thread_units) {
         thread_unit.thread.join();
     }
+    //std::cout << "TP stop_all_threads() end" << std::endl;
 }
 
 std::size_t ThreadPool::get_named_threads_number() const
@@ -97,25 +106,32 @@ bool ThreadPool::add_named_thread_unit(const ID& thread_id)
 
     NamedThreadUnit& unit = thread_unit_it->second;
     unit.state.store(States::IDLE, std::memory_order_relaxed);
+    unit.stop_command.store(false, std::memory_order_relaxed);
     unit.id = thread_id;
     unit.thread = std::thread([&unit]{
 
-        States state;
+        bool get_stop_command;
 
         while (true) {
             std::unique_lock<std::mutex> lock(unit.mutex);
-
-            unit.cv.wait(lock, [&state, &unit] { return (state = unit.state.load(std::memory_order_acquire)) != States::IDLE; });
+            //std::cout << "TP wait" << std::endl;
+            unit.cv.wait(lock, [&get_stop_command, &unit] { 
+                return unit.state.load(std::memory_order_acquire) != States::IDLE
+                        || (get_stop_command = unit.stop_command.load(std::memory_order_relaxed)); });
             lock.unlock();
 
-            if (state == States::STOP) {
+            if (get_stop_command) {
                 break;
             }
 
             unit.activity();
-            unit.state.store(States::IDLE, std::memory_order_release);
+            //std::cout << "TP activity stop" << std::endl;
+            unit.state.store(States::IDLE, std::memory_order_release);    
+ 
             lock.lock();
         }
+
+        //std::cout << "TP end" << std::endl;
     });
 
     return true;
@@ -159,7 +175,7 @@ bool ThreadPool::add_common_threads(std::size_t count)
                 std::unique_lock<std::mutex> lock(this->common_mutex_);
 
                 this->common_threads_.common_cv.wait(lock, [this, &unit, &state] {
-                    state = this->common_threads_.state.load(std::memory_order_acquire);
+                    state = this->common_threads_.state.load(std::memory_order_relaxed);
                     return state == CommonStates::STOP || !this->common_threads_.new_activities.empty();
                 });
                 
@@ -205,7 +221,7 @@ bool ThreadPool::try_run_activity(const ID& thread_id, const Activity& activity)
         }
 
         thread_unit.activity = activity;
-        thread_unit.state.store(States::BUSY, std::memory_order_release);
+        thread_unit.state.store(States::BUSY, std::memory_order_relaxed);
         thread_unit.cv.notify_one();
     }
 
@@ -214,11 +230,8 @@ bool ThreadPool::try_run_activity(const ID& thread_id, const Activity& activity)
 
 bool ThreadPool::run_activity(const Activity &activity)
 {
-    {
-        std::lock_guard<std::mutex> lock(common_mutex_);
-        common_threads_.new_activities.push(activity);
-    }
-
+    std::lock_guard<std::mutex> lock(common_mutex_);
+    common_threads_.new_activities.push(activity);
     common_threads_.common_cv.notify_one();
 
     return true;
